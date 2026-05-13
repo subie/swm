@@ -38,6 +38,25 @@ dotnet run --project ScrollingWM -c Release
 
 In another terminal, double-click `swm.ahk` to load the keybindings. Default mod is `Ctrl+Alt`; try `Ctrl+Alt+H` / `Ctrl+Alt+L` to focus left/right. Full key list is below.
 
+## Keybindings (default)
+
+Mod = `Ctrl+Alt`. Edit `swm.ahk` to remap.
+
+| Keys | Action |
+|---|---|
+| `Mod+H` / `Mod+L` | Focus left / right |
+| `Mod+,` / `Mod+.` | Focus first / last |
+| `Mod+Shift+H` / `Mod+Shift+L` | Swap left / right |
+| `Mod+Shift+,` / `Mod+Shift+.` | Move to start / end |
+| `Mod+T` | Toggle float on focused window |
+| `Mod+F` | Toggle fullscreen on focused window |
+| `Mod+=` | Resize all tiles in the active strip to half of the focused window's monitor width |
+| `Mod+Enter` | Swap focused with monitor 0 slot 1 (xmonad-style "swap master") |
+| `Mod+Shift+Enter` | Swap focused with monitor 1 slot 0 |
+| `Mod+Space` | Open `swmsearch` launcher |
+
+Drag a window with the mouse to place it under the cursor's tile (works for cross-monitor and cross-virtual-desktop drags too). Tab tears land where you drop them.
+
 ## Components
 
 | Project | What it is |
@@ -136,25 +155,6 @@ Register-ScheduledTask -TaskName "swm" -Action $action -Trigger $trigger -RunLev
 ```
 
 You can stop the daemon at any time with `Stop-Process -Name ScrollingWM` — it runs `Cleanup` on exit and restores tracked windows to their original positions.
-
-## Keybindings (default)
-
-Mod = `Ctrl+Alt`. Edit `swm.ahk` to remap.
-
-| Keys | Action |
-|---|---|
-| `Mod+H` / `Mod+L` | Focus left / right |
-| `Mod+,` / `Mod+.` | Focus first / last |
-| `Mod+Shift+H` / `Mod+Shift+L` | Swap left / right |
-| `Mod+Shift+,` / `Mod+Shift+.` | Move to start / end |
-| `Mod+T` | Toggle float on focused window |
-| `Mod+F` | Toggle fullscreen on focused window |
-| `Mod+=` | Resize all tiles in the active strip to half of the focused window's monitor width |
-| `Mod+Enter` | Swap focused with monitor 0 slot 1 (xmonad-style "swap master") |
-| `Mod+Shift+Enter` | Swap focused with monitor 1 slot 0 |
-| `Mod+Space` | Open `swmsearch` launcher |
-
-Drag a window with the mouse to place it under the cursor's tile (works for cross-monitor and cross-virtual-desktop drags too). Tab tears land where you drop them.
 
 ## Behaviors of note
 
