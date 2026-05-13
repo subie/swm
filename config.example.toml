@@ -4,9 +4,10 @@
 #
 # All keys shown below are optional. Defaults are conservative.
 
-# Default tile width in pixels. Each window can be resized individually
-# at runtime (Mod+= cycles half-monitor width).
-window_width = 1920
+# Default tile width in pixels. When omitted, defaults to half the work-area
+# width of the monitor each window is adopted on. Each window can be resized
+# individually at runtime (Mod+= cycles half-monitor width).
+# window_width = 1920
 
 # Pixels of empty space between adjacent tiles. 0 = flush.
 gap = 0

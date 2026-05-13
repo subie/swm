@@ -279,7 +279,7 @@ public sealed class Dispatcher
         var rect = WindowOps.GetRect(hwnd);
         _originalRects[hwnd] = rect;
         StateFile.Write(_originalRects);
-        var w = new ManagedWindow(hwnd, exe, cls, _config.WindowWidth);
+        var w = new ManagedWindow(hwnd, exe, cls, ResolveWindowWidth(hwnd));
         // Float if (a) a user rule matches, or (b) the window declares itself
         // non-resizable. Non-resizable windows are dialogs / pickers / fixed-
         // size utilities that break when SetWindowPos changes their dimensions
@@ -304,6 +304,16 @@ public sealed class Dispatcher
     // over a float, on the taskbar). One primitive used by every code path
     // that needs to place a window: tab-tear adoption, intra-strip drag,
     // cross-monitor drag, cross-desktop drag.
+    // Per-window tile width. Honors `window_width` from config when set;
+    // otherwise defaults to half the work-area width of the monitor the
+    // window is currently on.
+    private int ResolveWindowWidth(nint hwnd)
+    {
+        if (_config.WindowWidth is int w && w > 0) return w;
+        var mon = Monitors.WorkArea(Monitors.MonitorFor(hwnd));
+        return mon.Width > 0 ? mon.Width / 2 : Monitors.PrimaryWorkArea().Width / 2;
+    }
+
     private int CursorIndexIn(Strip strip, nint excludeHwnd)
     {
         var skip = new HashSet<nint>();
@@ -312,7 +322,7 @@ public sealed class Dispatcher
             if (WindowOps.IsMinimized(w.Hwnd)) skip.Add(w.Hwnd);
         var rects = Layout.Compute(
             strip, OrderedMonitors(),
-            new LayoutConfig(_config.WindowWidth, _config.Gap), skip);
+            new LayoutConfig(0, _config.Gap), skip);
         var (cx, cy) = WindowOps.CursorPos();
         var laidOutIdx = 0;
         for (var i = 0; i < strip.Windows.Count; i++)
@@ -637,11 +647,11 @@ public sealed class Dispatcher
             case "right": Commands.SwapRight(s, IsMin); break;
             case "master":
                 Commands.SwapAtMonitorSlot(s, OrderedMonitors(),
-                    new LayoutConfig(_config.WindowWidth, _config.Gap), 0, 1, IsMin);
+                    new LayoutConfig(0, _config.Gap), 0, 1, IsMin);
                 break;
             case "secondary":
                 Commands.SwapAtMonitorSlot(s, OrderedMonitors(),
-                    new LayoutConfig(_config.WindowWidth, _config.Gap), 1, 0, IsMin);
+                    new LayoutConfig(0, _config.Gap), 1, 0, IsMin);
                 break;
             default: return "err: swap arg must be left|right|master|secondary";
         }
@@ -795,7 +805,7 @@ public sealed class Dispatcher
     private void ReApply(Strip s, bool bringToFront = true)
     {
         var ordered = OrderedMonitors();
-        var cfg = new LayoutConfig(_config.WindowWidth, _config.Gap);
+        var cfg = new LayoutConfig(0, _config.Gap);
         var skip = new HashSet<nint>();
         foreach (var w in s.Windows)
             if (WindowOps.IsMinimized(w.Hwnd)) skip.Add(w.Hwnd);

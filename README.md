@@ -63,7 +63,6 @@ Copy-Item config.example.toml $HOME\.swm\config.toml
 Or create `~/.swm/config.toml` (i.e. `%USERPROFILE%\.swm\config.toml`) by hand. The full sample lives at [`config.example.toml`](./config.example.toml); a minimal version:
 
 ```toml
-window_width = 1920
 gap = 0
 
 # Hex color tints the focused window's border + title bar. Empty disables.

@@ -58,7 +58,7 @@ internal static partial class Program
         var configPath = args.Length > 0 ? args[0] : Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".swm", "config.toml");
         var config = Config.Load(configPath);
-        Console.WriteLine($"swm: window_width={config.WindowWidth} gap={config.Gap} float_rules={config.FloatRule.Count}");
+        Console.WriteLine($"swm: window_width={config.WindowWidth?.ToString() ?? "auto(50%)"} gap={config.Gap} float_rules={config.FloatRule.Count}");
 
         var selfExe = Path.GetFileName(Environment.ProcessPath ?? "ScrollingWM.exe");
         var dispatcher = new Dispatcher(config, selfExe);
