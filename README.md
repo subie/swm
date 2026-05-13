@@ -128,7 +128,7 @@ Mod = `Ctrl+Alt`. Edit `swm.ahk` to remap.
 | `Mod+Shift+,` / `Mod+Shift+.` | Move to start / end |
 | `Mod+T` | Toggle float on focused window |
 | `Mod+F` | Toggle fullscreen on focused window |
-| `Mod+=` | Resize focused window to half-monitor width |
+| `Mod+=` | Resize all tiles in the active strip to half of the focused window's monitor width |
 | `Mod+Enter` | Swap focused with monitor 0 slot 1 (xmonad-style "swap master") |
 | `Mod+Shift+Enter` | Swap focused with monitor 1 slot 0 |
 | `Mod+Space` | Open `swmsearch` launcher |
