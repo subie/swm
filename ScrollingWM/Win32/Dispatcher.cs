@@ -506,14 +506,23 @@ public sealed class Dispatcher
             if (idx >= 0)
             {
                 var w = oldStrip.Windows[idx];
-                if (widthChanged) w.WidthPx = rect.Width;
-                // Drop where the cursor is. Same rule as tab tear; lets the
-                // user reorder tiles by drag-and-drop and pick the right
-                // monitor by where they release.
-                var target = CursorIndexIn(oldStrip, hwnd);
-                oldStrip.RemoveAt(idx);
-                oldStrip.Insert(target, w);
-                oldStrip.SetFocus(target);
+                if (widthChanged)
+                {
+                    // Pure resize: never reorder. The cursor naturally crosses
+                    // into a neighbor while dragging an edge — treating that
+                    // as a move would swap tiles every resize.
+                    w.WidthPx = rect.Width;
+                }
+                else
+                {
+                    // Drop where the cursor is. Same rule as tab tear; lets the
+                    // user reorder tiles by drag-and-drop and pick the right
+                    // monitor by where they release.
+                    var target = CursorIndexIn(oldStrip, hwnd);
+                    oldStrip.RemoveAt(idx);
+                    oldStrip.Insert(target, w);
+                    oldStrip.SetFocus(target);
+                }
             }
             // bringToFront=false: foreground is already on hwnd (user just
             // released). Re-raising would yank activation off floats.
@@ -530,7 +539,10 @@ public sealed class Dispatcher
 
         if (widthChanged) w2.WidthPx = rect.Width;
         var newStrip = GetOrCreate(newKey);
-        var insertAt = CursorIndexIn(newStrip, hwnd);
+        // Cross-desktop with a resize: append rather than place at cursor, so
+        // the resize doesn't double as a reorder. (Cross-desktop resize is
+        // exotic anyway — typically a virtual-desktop drag is a pure move.)
+        var insertAt = widthChanged ? newStrip.Windows.Count : CursorIndexIn(newStrip, hwnd);
         newStrip.Insert(insertAt, w2);
         newStrip.SetFocus(insertAt);
         _hwndToStrip[hwnd] = newKey;
