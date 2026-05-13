@@ -8,7 +8,7 @@ public sealed class Config
     /// <summary>Tile width in px. When null, defaults to half the work-area
     /// width of the monitor each window is adopted on.</summary>
     public int? WindowWidth { get; set; }
-    public int Gap { get; set; } = 4;
+    public int Gap { get; set; } = 0;
     /// <summary>Hex color like "#FF8C00" tints the focused window's border + title bar. Empty disables.</summary>
     public string FocusColor { get; set; } = "#FF8C00";
     public List<FloatRule> FloatRule { get; set; } = new();

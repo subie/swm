@@ -10,7 +10,7 @@
 # window_width = 1920
 
 # Pixels of empty space between adjacent tiles. 0 = flush.
-gap = 0
+# gap = 0
 
 # Hex color tints the focused window's border + title bar.
 # Empty string disables. Windows 11 22H2+ only.
