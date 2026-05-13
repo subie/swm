@@ -2,16 +2,6 @@
 
 A keyboard-driven, single-row scrolling tiling window manager for Windows 10/11. Inspired by [niri](https://github.com/YaLTeR/niri) and xmonad: every window lives in one horizontal "reel" that scrolls under your monitors, with one window always focused. Multi-monitor (windows can straddle bezels), multi-virtual-desktop, AutoHotkey-driven keybindings, dmenu-style search.
 
-## Components
-
-| Project | What it is |
-|---|---|
-| `ScrollingWM/` | The daemon. Hooks Win32 events, owns the layout, exposes a named-pipe IPC. |
-| `swmctl/` | Thin CLI client that sends commands over the pipe (`swmctl focus right`, etc.). |
-| `swmsearch/` | WinForms dmenu-style app launcher. |
-| `swm.ahk` | AutoHotkey v2 script binding hotkeys to `swmctl`. |
-| `ScrollingWM.Tests/` | xUnit tests for layout, commands, and pure helpers. |
-
 ## Requirements
 
 - **Windows 10 (1903+)** or **Windows 11**. Win11 22H2+ enables the focus border tint.
@@ -26,6 +16,37 @@ A keyboard-driven, single-row scrolling tiling window manager for Windows 10/11.
   ```
 
 NuGet packages (`Tomlyn`, `System.Drawing.Common`) are restored automatically by `dotnet build`. No other native dependencies.
+
+## Quickstart
+
+Try it out without publishing or autostart setup. Ctrl-C the daemon and your windows are restored to their original positions.
+
+```powershell
+git clone https://github.com/subie/swm.git
+cd swm
+
+# Build all three projects (daemon, swmctl, swmsearch).
+dotnet build ScrollingWM.slnx -c Release
+
+# Drop in the sample config.
+mkdir $HOME\.swm -ErrorAction SilentlyContinue
+Copy-Item config.example.toml $HOME\.swm\config.toml
+
+# Start the daemon (foreground; Ctrl-C to stop and restore windows).
+dotnet run --project ScrollingWM -c Release
+```
+
+In another terminal, double-click `swm.ahk` to load the keybindings. Default mod is `Ctrl+Alt`; try `Ctrl+Alt+H` / `Ctrl+Alt+L` to focus left/right. Full key list is below.
+
+## Components
+
+| Project | What it is |
+|---|---|
+| `ScrollingWM/` | The daemon. Hooks Win32 events, owns the layout, exposes a named-pipe IPC. |
+| `swmctl/` | Thin CLI client that sends commands over the pipe (`swmctl focus right`, etc.). |
+| `swmsearch/` | WinForms dmenu-style app launcher. |
+| `swm.ahk` | AutoHotkey v2 script binding hotkeys to `swmctl`. |
+| `ScrollingWM.Tests/` | xUnit tests for layout, commands, and pure helpers. |
 
 ## Build
 
