@@ -1,0 +1,55 @@
+# swm sample config — copy to ~/.swm/config.toml
+#
+#   PowerShell:  Copy-Item config.example.toml $HOME\.swm\config.toml
+#
+# All keys shown below are optional. Defaults are conservative.
+
+# Default tile width in pixels. Each window can be resized individually
+# at runtime (Mod+= cycles half-monitor width).
+window_width = 1920
+
+# Pixels of empty space between adjacent tiles. 0 = flush.
+gap = 0
+
+# Hex color tints the focused window's border + title bar.
+# Empty string disables. Windows 11 22H2+ only.
+focus_color = "#FF8C00"
+
+
+# ---------------------------------------------------------------------------
+# Float rules
+#
+# Any rule that matches floats the matching window on creation. Match fields
+# inside one rule are AND-combined; multiple [[float_rule]] blocks are OR-ed.
+# Each rule must contain at least one of: exe, class, title.
+# Strings support a "*" wildcard; everything else is exact match.
+#
+# Non-resizable windows (those without WS_THICKFRAME | WS_MAXIMIZEBOX in
+# their style — fixed-size dialogs, account pickers, About boxes) are
+# auto-floated regardless of these rules. You only need entries here for
+# resizable windows that misbehave when tiled.
+# ---------------------------------------------------------------------------
+
+# Standard Win32 dialog class — Save As, Open, About, etc.
+[[float_rule]]
+class = "#32770"
+
+# UAC consent prompt
+[[float_rule]]
+exe = "consent.exe"
+
+# UWP / WinUI host (Settings, Calculator, Store, Photos, ...). Their XAML
+# content lives in a child CoreWindow that doesn't reliably re-lay-out when
+# the outer host is resized via SetWindowPos — content stays as the splash
+# brush ("all blue") and EVENT_SYSTEM_FOREGROUND often fires for the
+# CoreWindow rather than the trackable top-level. Floating sidesteps both.
+[[float_rule]]
+exe = "ApplicationFrameHost.exe"
+
+# Snipping Tool overlay
+[[float_rule]]
+exe = "SnippingTool.exe"
+
+# Task Manager
+[[float_rule]]
+exe = "Taskmgr.exe"

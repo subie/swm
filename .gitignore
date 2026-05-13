@@ -1,0 +1,31 @@
+# Build output
+bin/
+obj/
+out/
+*.user
+*.suo
+
+# Rider / VS / VSCode
+.idea/
+.vs/
+.vscode/
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Misc
+*.log
+
+.claude/

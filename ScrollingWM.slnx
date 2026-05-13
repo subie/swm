@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ScrollingWM.Tests/ScrollingWM.Tests.csproj" />
+  <Project Path="ScrollingWM/ScrollingWM.csproj" />
+  <Project Path="swmctl/swmctl.csproj" />
+  <Project Path="swmsearch/swmsearch.csproj" />
+</Solution>
