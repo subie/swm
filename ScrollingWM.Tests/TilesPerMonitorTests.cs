@@ -22,46 +22,70 @@ public class TilesPerMonitorTests
     }
 
     [Fact]
-    public void RightAnchorKeepsRightEdgeOfRightmostPrimaryTile()
+    public void FocusedSnapsToNearestSlotOnItsMonitor()
     {
-        // Initial: 4 tiles of 960 on dual monitor, packed at 0, 960, 1920, 2880.
-        // Primary spans 0..1920. Tile 0 (0..960) and tile 1 (960..1920) overlap primary.
-        // Right anchor → tile 1, right edge at 1920.
-        var s = MakeStrip(4);
+        // 4 tiles of 960 packed at 0, 960, 1920, 2880. Focus tile 1 (left=960).
+        // Resize to 4 tiles/monitor → newWidth = 480. Slots on primary (mon 0):
+        // 0, 480, 960, 1440. Nearest to 960 is 960 itself.
+        var s = MakeStrip(4, focused: 1);
 
-        Commands.SetAllToTilesPerMonitor(s, DualMonitor, Primary, tilesPerMonitor: 4, anchor: "right", includeFullscreen: false);
+        Commands.SetAllToTilesPerMonitor(s, DualMonitor, Primary, tilesPerMonitor: 4, includeFullscreen: false);
 
-        // Each tile now 480. After re-layout, anchor (still index 1) right edge must be at 1920.
         var rects = Layout.Compute(s, DualMonitor, new LayoutConfig(0, 0));
-        Assert.Equal(1920, rects[s.Windows[1].Hwnd].Right);
+        Assert.Equal(960, rects[s.Windows[1].Hwnd].Left);
         Assert.All(s.Windows, w => Assert.Equal(480, w.WidthPx));
     }
 
     [Fact]
-    public void LeftAnchorKeepsLeftEdgeOfLeftmostPrimaryTile()
+    public void FocusedSnapsLeftWhenCloserToLeftSlot()
     {
-        // Same setup; left anchor → tile 0, left edge at 0.
-        var s = MakeStrip(4);
+        // Focused tile 1 starts at 960 (focused). Set scroll so it sits at 1000.
+        // newWidth=480, slots: 0, 480, 960, 1440. Nearest to 1000 is 960.
+        var s = MakeStrip(4, focused: 1);
+        s.ScrollOffsetPx = -40; // tile 1 left becomes 1000
 
-        Commands.SetAllToTilesPerMonitor(s, DualMonitor, Primary, tilesPerMonitor: 4, anchor: "left", includeFullscreen: false);
-
+        Commands.SetAllToTilesPerMonitor(s, DualMonitor, Primary, tilesPerMonitor: 4, includeFullscreen: false);
         var rects = Layout.Compute(s, DualMonitor, new LayoutConfig(0, 0));
-        Assert.Equal(0, rects[s.Windows[0].Hwnd].Left);
+        Assert.Equal(960, rects[s.Windows[1].Hwnd].Left);
+    }
+
+    [Fact]
+    public void FocusedSnapsRightWhenCloserToRightSlot()
+    {
+        // Tile 1 at 960; scroll -250 → tile 1 left = 1210. Slots: 0, 480, 960, 1440.
+        // 1210 is closer to 1440 than 960 (dist 230 vs 250).
+        var s = MakeStrip(4, focused: 1);
+        s.ScrollOffsetPx = -250;
+
+        Commands.SetAllToTilesPerMonitor(s, DualMonitor, Primary, tilesPerMonitor: 4, includeFullscreen: false);
+        var rects = Layout.Compute(s, DualMonitor, new LayoutConfig(0, 0));
+        Assert.Equal(1440, rects[s.Windows[1].Hwnd].Left);
+    }
+
+    [Fact]
+    public void SnapsToFocusedTilesMonitor_NotPrimary()
+    {
+        // Focus tile 3 (initially at 2880, sits on monitor 1 = secondary 1920..3840).
+        // newWidth=480; slots on secondary: 1920, 2400, 2880, 3360. Tile 3 left = 2880,
+        // nearest slot = 2880.
+        var s = MakeStrip(4, focused: 3);
+        Commands.SetAllToTilesPerMonitor(s, DualMonitor, Primary, tilesPerMonitor: 4, includeFullscreen: false);
+        var rects = Layout.Compute(s, DualMonitor, new LayoutConfig(0, 0));
+        Assert.Equal(2880, rects[s.Windows[3].Hwnd].Left);
     }
 
     [Fact]
     public void FullscreenTilePreservedWhenIncludeFullscreenFalse()
     {
         var s = MakeStrip(3);
-        // Fullscreen tile 1.
         s.Windows[1].PreFullscreenWidth = 960;
         s.Windows[1].WidthPx = Primary.Width;
         s.Windows[1].FullscreenMonitorLeft = 0;
 
-        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 2, anchor: "right", includeFullscreen: false);
+        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 2, includeFullscreen: false);
 
         Assert.Equal(960, s.Windows[0].WidthPx);
-        Assert.Equal(Primary.Width, s.Windows[1].WidthPx); // unchanged
+        Assert.Equal(Primary.Width, s.Windows[1].WidthPx);
         Assert.True(s.Windows[1].Fullscreen);
         Assert.Equal(960, s.Windows[2].WidthPx);
     }
@@ -74,7 +98,7 @@ public class TilesPerMonitorTests
         s.Windows[1].WidthPx = Primary.Width;
         s.Windows[1].FullscreenMonitorLeft = 0;
 
-        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 2, anchor: "right", includeFullscreen: true);
+        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 2, includeFullscreen: true);
 
         Assert.All(s.Windows, w => Assert.Equal(960, w.WidthPx));
         Assert.False(s.Windows[1].Fullscreen);
@@ -83,32 +107,10 @@ public class TilesPerMonitorTests
     }
 
     [Fact]
-    public void NoTileOnPrimaryFallsBackToFocused()
-    {
-        // Build a strip whose tiles all sit on the secondary monitor at start
-        // (scrolled far right). Anchor should fall back to focused.
-        var s = MakeStrip(2, focused: 0, width: 480);
-        s.ScrollOffsetPx = -2000; // pushes everything onto secondary monitor area
-
-        // Probe to confirm tile 0 is off primary.
-        var probe = Layout.Compute(s, DualMonitor, new LayoutConfig(0, 0));
-        var beforeFocusedLeft = probe[s.Windows[0].Hwnd].Left;
-        var beforeFocusedRight = probe[s.Windows[0].Hwnd].Right;
-        Assert.True(beforeFocusedLeft >= Primary.Right || beforeFocusedRight <= Primary.Left);
-
-        Commands.SetAllToTilesPerMonitor(s, DualMonitor, Primary, tilesPerMonitor: 4, anchor: "right", includeFullscreen: false);
-
-        // Focused tile (index 0) right edge should land at where it was pre-resize.
-        var after = Layout.Compute(s, DualMonitor, new LayoutConfig(0, 0));
-        Assert.Equal(beforeFocusedRight, after[s.Windows[0].Hwnd].Right);
-    }
-
-    [Fact]
     public void EmptyStripIsNoOp()
     {
         var s = new Strip(new StripKey(Guid.Empty));
-        // Should not throw.
-        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 2, anchor: "right", includeFullscreen: false);
+        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 2, includeFullscreen: false);
         Assert.Empty(s.Windows);
     }
 
@@ -116,7 +118,7 @@ public class TilesPerMonitorTests
     public void InvalidNIsNoOp()
     {
         var s = MakeStrip(2);
-        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 0, anchor: "right", includeFullscreen: false);
+        Commands.SetAllToTilesPerMonitor(s, SingleMonitor, Primary, tilesPerMonitor: 0, includeFullscreen: false);
         Assert.All(s.Windows, w => Assert.Equal(960, w.WidthPx));
     }
 }

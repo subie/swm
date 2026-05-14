@@ -12,10 +12,6 @@ public sealed class Config
     /// <summary>How many equally-sized tiles fit on one monitor by default.
     /// Drives adoption width and the tiles command. Default 2.</summary>
     public int TilesPerMonitor { get; set; } = 2;
-    /// <summary>Which edge of the primary monitor stays pinned during a
-    /// bulk resize: "right" keeps the rightmost tile on primary in place;
-    /// "left" keeps the leftmost.</summary>
-    public string ResizeAnchor { get; set; } = "right";
     /// <summary>Hex color like "#FF8C00" tints the focused window's border + title bar. Empty disables.</summary>
     public string FocusColor { get; set; } = "#FF8C00";
     public List<FloatRule> FloatRule { get; set; } = new();

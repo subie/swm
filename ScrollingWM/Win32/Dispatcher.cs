@@ -749,7 +749,7 @@ public sealed class Dispatcher
             return "err: tiles arg must be an int 1..16 or 'reset'";
         }
         Commands.SetAllToTilesPerMonitor(s, OrderedMonitors(), primary,
-            _config.TilesPerMonitor, _config.ResizeAnchor, includeFullscreen);
+            _config.TilesPerMonitor, includeFullscreen);
         ReApply(s);
         return "ok";
     }

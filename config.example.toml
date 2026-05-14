@@ -17,11 +17,6 @@
 # Override per-window with mouse-resize. Default 2.
 # tiles_per_monitor = 2
 
-# When a bulk resize changes tile widths, which edge of the primary monitor
-# stays pinned. "right" keeps the rightmost tile on the primary monitor
-# in place; "left" keeps the leftmost. Default "right".
-# resize_anchor = "right"
-
 # Hex color tints the focused window's border + title bar.
 # Empty string disables. Windows 11 22H2+ only.
 focus_color = "#FF8C00"

@@ -154,48 +154,41 @@ public static class Commands
     }
 
     /// <summary>
-    /// Bulk-resize every tile in the strip to <c>primary.Width / tilesPerMonitor</c>,
-    /// then nudge <see cref="Strip.ScrollOffsetPx"/> so a chosen anchor tile's
-    /// edge stays at the same screen X. Anchor = the rightmost (or leftmost,
-    /// per <paramref name="anchor"/>) tile currently overlapping the primary
-    /// monitor's work area; falls back to the focused tile if none qualify.
+    /// Bulk-resize every tile in the strip to <c>monitor.Width / tilesPerMonitor</c>,
+    /// then nudge <see cref="Strip.ScrollOffsetPx"/> so the focused tile's
+    /// left edge snaps to the nearest grid slot on its current monitor —
+    /// i.e. <c>monitor.Left + k * newWidth</c> for some k. Picks the
+    /// monitor the focused tile's center is on; falls back to the primary.
     ///
     /// When <paramref name="includeFullscreen"/> is false, fullscreen tiles
     /// keep their fullscreen state and width. When true, fullscreen state is
     /// cleared on every tile and they're resized like the rest.
     /// </summary>
     public static void SetAllToTilesPerMonitor(Strip s, IReadOnlyList<Rect> monitors, Rect primary,
-        int tilesPerMonitor, string anchor, bool includeFullscreen)
+        int tilesPerMonitor, bool includeFullscreen)
     {
         if (s.Windows.Count == 0 || tilesPerMonitor <= 0 || primary.Width <= 0 || monitors.Count == 0) return;
         var newWidth = primary.Width / tilesPerMonitor;
         if (newWidth <= 0) return;
-        var anchorRight = !string.Equals(anchor, "left", StringComparison.OrdinalIgnoreCase);
 
-        // 1. Probe current layout to pick an anchor and record its edge X.
-        var savedScroll = s.ScrollOffsetPx;
-        var rects = Layout.Compute(s, monitors, new LayoutConfig(0, 0));
-        s.ScrollOffsetPx = savedScroll;
-
-        int anchorIdx = -1;
-        int anchorEdgeX = 0;
-        var bestExtreme = anchorRight ? int.MinValue : int.MaxValue;
-        for (var i = 0; i < s.Windows.Count; i++)
+        // 1. Probe current layout; find focused tile's rect + the monitor it sits on.
+        var fIdx = s.FocusedIndex;
+        Rect? focusedRectBefore = null;
+        Rect focusedMonitor = primary;
+        if (fIdx >= 0)
         {
-            if (!rects.TryGetValue(s.Windows[i].Hwnd, out var r)) continue;
-            // Tile must overlap primary work area (not just touch).
-            if (r.Right <= primary.Left || r.Left >= primary.Right) continue;
-            var key = anchorRight ? r.Right : r.Left;
-            var better = anchorRight ? key > bestExtreme : key < bestExtreme;
-            if (better) { bestExtreme = key; anchorIdx = i; anchorEdgeX = key; }
-        }
-        if (anchorIdx < 0)
-        {
-            anchorIdx = s.FocusedIndex;
-            if (anchorIdx >= 0 && rects.TryGetValue(s.Windows[anchorIdx].Hwnd, out var fr))
-                anchorEdgeX = anchorRight ? fr.Right : fr.Left;
-            else
-                return; // nothing laid out; bail
+            var savedScroll = s.ScrollOffsetPx;
+            var rects = Layout.Compute(s, monitors, new LayoutConfig(0, 0));
+            s.ScrollOffsetPx = savedScroll;
+            if (rects.TryGetValue(s.Windows[fIdx].Hwnd, out var fr))
+            {
+                focusedRectBefore = fr;
+                var cx = (fr.Left + fr.Right) / 2;
+                foreach (var m in monitors)
+                {
+                    if (cx >= m.Left && cx < m.Right) { focusedMonitor = m; break; }
+                }
+            }
         }
 
         // 2. Resize every tile.
@@ -210,14 +203,24 @@ public static class Commands
             w.WidthPx = newWidth;
         }
 
-        // 3. Re-lay-out, then nudge scroll so anchor edge lands at recorded X.
+        if (focusedRectBefore is not Rect fb) return;
+
+        // 3. Nearest grid slot on focused tile's monitor.
+        var n = Math.Max(1, (focusedMonitor.Width + newWidth - 1) / newWidth);
+        var bestSlotLeft = focusedMonitor.Left;
+        var bestDist = int.MaxValue;
+        for (var k = 0; k < n; k++)
+        {
+            var slotLeft = focusedMonitor.Left + k * newWidth;
+            var d = Math.Abs(slotLeft - fb.Left);
+            if (d < bestDist) { bestDist = d; bestSlotLeft = slotLeft; }
+        }
+
+        // 4. Re-layout, then nudge scroll so focused.Left lands at bestSlotLeft.
         var savedScroll2 = s.ScrollOffsetPx;
         var rects2 = Layout.Compute(s, monitors, new LayoutConfig(0, 0));
         s.ScrollOffsetPx = savedScroll2;
-        if (rects2.TryGetValue(s.Windows[anchorIdx].Hwnd, out var ar))
-        {
-            var newEdge = anchorRight ? ar.Right : ar.Left;
-            s.ScrollOffsetPx += newEdge - anchorEdgeX;
-        }
+        if (rects2.TryGetValue(s.Windows[fIdx].Hwnd, out var fa))
+            s.ScrollOffsetPx += fa.Left - bestSlotLeft;
     }
 }
