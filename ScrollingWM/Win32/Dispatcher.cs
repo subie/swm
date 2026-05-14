@@ -150,8 +150,20 @@ public sealed class Dispatcher
         if (currentKey is StripKey ck && !ck.Equals(_lastSeenCurrentDesktop))
         {
             _lastSeenCurrentDesktop = ck;
-            var focusedHwnd = _strips[ck].Focused?.Hwnd ?? 0;
-            if (focusedHwnd != 0) HandleForeground(focusedHwnd);
+            var s = _strips[ck];
+            var focusedHwnd = s.Focused?.Hwnd ?? 0;
+            if (focusedHwnd != 0)
+            {
+                _lastActiveStripKey = ck;
+                UpdateHighlight(focusedHwnd);
+                // bringToFront=true: on a virtual-desktop switch the OS may
+                // have foregrounded a different window (or none). We must
+                // actively activate our focused tile so it receives input.
+                // HandleForeground deliberately won't do this — it assumes the
+                // hwnd is already foreground.
+                ReApply(s, bringToFront: true);
+                _applied.Add(ck);
+            }
         }
 
         // (2) Highlight keep-alive.
