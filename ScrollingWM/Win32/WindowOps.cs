@@ -203,6 +203,12 @@ public static partial class WindowOps
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
     public static bool EndBatch(nint batch) => EndDeferWindowPos(batch);
 
+    /// <summary>Raise <paramref name="hwnd"/> to the top of the z-order
+    /// without changing keyboard activation. Useful for keeping floats above
+    /// tiles after we've activated some other window.</summary>
+    public static void RaiseZOrder(nint hwnd) =>
+        SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
     public static void RaiseAndFocus(nint hwnd)
     {
         SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);

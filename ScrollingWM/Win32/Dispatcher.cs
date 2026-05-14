@@ -721,11 +721,21 @@ public sealed class Dispatcher
         if (!_hwndToStrip.TryGetValue(fg, out var key)) return "err: focus not tracked";
         var s = _strips[key];
         if (s.IndexOf(fg) >= 0)
+        {
+            // Tile -> float. The strip's focused index shifts to a neighbor
+            // after the float removes itself; suppress raising that neighbor
+            // and explicitly activate the just-floated window so it stays on
+            // top and keeps input focus.
             Commands.Float(s, WindowOps.GetRect(fg));
+            ReApply(s, bringToFront: false);
+            WindowOps.RaiseAndFocus(fg);
+        }
         else if (s.Floated.ContainsKey(fg))
+        {
             Commands.Unfloat(s, fg);
+            ReApply(s);
+        }
         else return "err: focus not in strip";
-        ReApply(s);
         return "ok";
     }
 
@@ -867,6 +877,11 @@ public sealed class Dispatcher
         if (_draggingHwnd != 0) rects.Remove(_draggingHwnd);
         Console.WriteLine($"swm: apply desk={s.Key.DesktopId} rects={rects.Count} focus=0x{(s.Focused?.Hwnd ?? 0):X} scroll={s.ScrollOffsetPx} skipped={skip.Count} bringToFront={bringToFront}");
         _applier.Apply(rects, s.Focused?.Hwnd ?? 0, bringToFront);
+        // Floats live above tiles in z-order. Since Apply may have raised the
+        // focused tile to HWND_TOP, push every float back above it. NOACTIVATE
+        // so input focus is unaffected — the focused tile keeps keystrokes.
+        foreach (var hwnd in s.Floated.Keys)
+            WindowOps.RaiseZOrder(hwnd);
         UpdateHighlight(s.Focused?.Hwnd ?? 0);
     }
 
