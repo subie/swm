@@ -567,6 +567,7 @@ public sealed class Dispatcher
             "float" => DoFloat(arg),
             "fullscreen" => DoFullscreen(arg),
             "tiles" => DoTiles(arg),
+            "resize" => DoResize(arg),
             "list" => DoList(),
             "goto" => DoGoto(arg),
             "dump" => DoDump(),
@@ -725,6 +726,28 @@ public sealed class Dispatcher
             ? Monitors.WorkArea(Monitors.MonitorFor(focusedHwnd))
             : Monitors.AllWorkAreas().FirstOrDefault();
         Commands.ToggleFullscreen(s, monitor);
+        ReApply(s);
+        return "ok";
+    }
+
+    // Resize the focused tile in monitor-relative steps (1/16th of the
+    // focused tile's monitor width, ≥50 px). Doesn't touch other tiles —
+    // they shift naturally because layout packs left-to-right.
+    private string DoResize(string arg)
+    {
+        var s = ActiveStrip(); if (s == null) return "err: no active strip";
+        var w = s.Focused; if (w == null) return "err: no focused";
+        var mon = Monitors.WorkArea(Monitors.MonitorFor(w.Hwnd));
+        var monWidth = mon.Width > 0 ? mon.Width : Monitors.PrimaryWorkArea().Width;
+        var step = Math.Max(50, monWidth / 16);
+        int delta = arg switch
+        {
+            "grow" => step,
+            "shrink" => -step,
+            _ => 0
+        };
+        if (delta == 0) return "err: resize arg must be grow|shrink";
+        Commands.ResizeFocused(s, delta);
         ReApply(s);
         return "ok";
     }

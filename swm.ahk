@@ -52,6 +52,8 @@ OpenSearch(*) {
 ; Use HotIfWinActive("") so these are global, then register dynamically.
 HotKey ModKey . "j",        (*) => SwmSend("focus left")
 HotKey ModKey . "k",        (*) => SwmSend("focus right")
+HotKey ModKey . "h",        (*) => SwmSend("resize shrink")
+HotKey ModKey . "l",        (*) => SwmSend("resize grow")
 HotKey ModKey . ",",        (*) => SwmSend("focus home")
 HotKey ModKey . ".",        (*) => SwmSend("focus end")
 

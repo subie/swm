@@ -154,6 +154,18 @@ public static class Commands
     }
 
     /// <summary>
+    /// Grow/shrink the focused tile by <paramref name="deltaPx"/>, clamped
+    /// to <paramref name="minWidth"/>. No-op for fullscreen tiles. Pure.
+    /// </summary>
+    public static void ResizeFocused(Strip s, int deltaPx, int minWidth = 200)
+    {
+        var w = s.Focused;
+        if (w == null || w.Fullscreen) return;
+        var newWidth = Math.Max(minWidth, w.WidthPx + deltaPx);
+        w.WidthPx = newWidth;
+    }
+
+    /// <summary>
     /// Bulk-resize every tile in the strip to <c>monitor.Width / tilesPerMonitor</c>,
     /// then nudge <see cref="Strip.ScrollOffsetPx"/> so the focused tile's
     /// left edge snaps to the nearest grid slot on its current monitor —

@@ -45,6 +45,7 @@ Mod = `Ctrl+Alt`. Edit `swm.ahk` to remap.
 | Keys | Action |
 |---|---|
 | `Mod+J` / `Mod+K` | Focus left / right |
+| `Mod+H` / `Mod+L` | Shrink / grow focused window (1/16 of its monitor's width per press) |
 | `Mod+,` / `Mod+.` | Focus first / last |
 | `Mod+Shift+J` / `Mod+Shift+K` | Swap left / right |
 | `Mod+Shift+,` / `Mod+Shift+.` | Move to start / end |
