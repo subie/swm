@@ -50,13 +50,13 @@ OpenSearch(*) {
 
 ; -------- bindings --------
 ; Use HotIfWinActive("") so these are global, then register dynamically.
-HotKey ModKey . "h",        (*) => SwmSend("focus left")
-HotKey ModKey . "l",        (*) => SwmSend("focus right")
+HotKey ModKey . "j",        (*) => SwmSend("focus left")
+HotKey ModKey . "k",        (*) => SwmSend("focus right")
 HotKey ModKey . ",",        (*) => SwmSend("focus home")
 HotKey ModKey . ".",        (*) => SwmSend("focus end")
 
-HotKey ModKey . "+h",       (*) => SwmSend("swap left")
-HotKey ModKey . "+l",       (*) => SwmSend("swap right")
+HotKey ModKey . "+j",       (*) => SwmSend("swap left")
+HotKey ModKey . "+k",       (*) => SwmSend("swap right")
 HotKey ModKey . "+,",       (*) => SwmSend("move home")
 HotKey ModKey . "+.",       (*) => SwmSend("move end")
 

@@ -36,7 +36,7 @@ Copy-Item config.example.toml $HOME\.swm\config.toml
 dotnet run --project ScrollingWM -c Release
 ```
 
-In another terminal, double-click `swm.ahk` to load the keybindings. Default mod is `Ctrl+Alt`; try `Ctrl+Alt+H` / `Ctrl+Alt+L` to focus left/right. Full key list is below.
+In another terminal, double-click `swm.ahk` to load the keybindings. Default mod is `Ctrl+Alt`; try `Ctrl+Alt+J` / `Ctrl+Alt+K` to focus left/right. Full key list is below.
 
 ## Keybindings (default)
 
@@ -44,9 +44,9 @@ Mod = `Ctrl+Alt`. Edit `swm.ahk` to remap.
 
 | Keys | Action |
 |---|---|
-| `Mod+H` / `Mod+L` | Focus left / right |
+| `Mod+J` / `Mod+K` | Focus left / right |
 | `Mod+,` / `Mod+.` | Focus first / last |
-| `Mod+Shift+H` / `Mod+Shift+L` | Swap left / right |
+| `Mod+Shift+J` / `Mod+Shift+K` | Swap left / right |
 | `Mod+Shift+,` / `Mod+Shift+.` | Move to start / end |
 | `Mod+T` | Toggle float on focused window |
 | `Mod+F` | Toggle fullscreen on focused window |
