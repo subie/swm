@@ -305,13 +305,15 @@ public sealed class Dispatcher
     // that needs to place a window: tab-tear adoption, intra-strip drag,
     // cross-monitor drag, cross-desktop drag.
     // Per-window tile width. Honors `window_width` from config when set;
-    // otherwise defaults to half the work-area width of the monitor the
-    // window is currently on.
+    // otherwise divides the work-area width of the monitor the window is on
+    // by `tiles_per_monitor`.
     private int ResolveWindowWidth(nint hwnd)
     {
         if (_config.WindowWidth is int w && w > 0) return w;
+        var n = Math.Max(1, _config.TilesPerMonitor);
         var mon = Monitors.WorkArea(Monitors.MonitorFor(hwnd));
-        return mon.Width > 0 ? mon.Width / 2 : Monitors.PrimaryWorkArea().Width / 2;
+        var width = mon.Width > 0 ? mon.Width : Monitors.PrimaryWorkArea().Width;
+        return width / n;
     }
 
     private int CursorIndexIn(Strip strip, nint excludeHwnd)
@@ -564,7 +566,7 @@ public sealed class Dispatcher
             "move" => DoMove(arg),
             "float" => DoFloat(arg),
             "fullscreen" => DoFullscreen(arg),
-            "resize" => DoResize(arg),
+            "tiles" => DoTiles(arg),
             "list" => DoList(),
             "goto" => DoGoto(arg),
             "dump" => DoDump(),
@@ -727,22 +729,27 @@ public sealed class Dispatcher
         return "ok";
     }
 
-    private string DoResize(string arg)
+    private string DoTiles(string arg)
     {
-        if (arg != "half") return "err: resize arg must be half";
         var s = ActiveStrip(); if (s == null) return "err: no active strip";
-        var focusedHwnd = s.Focused?.Hwnd ?? 0;
-        var monitor = focusedHwnd != 0
-            ? Monitors.WorkArea(Monitors.MonitorFor(focusedHwnd))
-            : Monitors.AllWorkAreas().FirstOrDefault();
-        if (monitor.Width <= 0) return "err: no monitor";
-        var half = monitor.Width / 2;
-        foreach (var w in s.Windows)
+        var primary = Monitors.PrimaryWorkArea();
+        if (primary.Width <= 0) return "err: no primary monitor";
+        bool includeFullscreen;
+        if (string.Equals(arg, "reset", StringComparison.OrdinalIgnoreCase))
         {
-            // Skip the fullscreen window — it owns its width until toggled off.
-            if (w.PreFullscreenWidth.HasValue) continue;
-            w.WidthPx = half;
+            includeFullscreen = true;
         }
+        else if (int.TryParse(arg, out var n) && n >= 1 && n <= 16)
+        {
+            _config.TilesPerMonitor = n;
+            includeFullscreen = false;
+        }
+        else
+        {
+            return "err: tiles arg must be an int 1..16 or 'reset'";
+        }
+        Commands.SetAllToTilesPerMonitor(s, OrderedMonitors(), primary,
+            _config.TilesPerMonitor, _config.ResizeAnchor, includeFullscreen);
         ReApply(s);
         return "ok";
     }

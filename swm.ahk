@@ -62,7 +62,11 @@ HotKey ModKey . "+.",       (*) => SwmSend("move end")
 
 HotKey ModKey . "t",        (*) => SwmSend("float toggle")
 HotKey ModKey . "f",        (*) => SwmSend("fullscreen toggle")
-HotKey ModKey . "=",        (*) => SwmSend("resize half")
+HotKey ModKey . "=",        (*) => SwmSend("tiles reset")
+HotKey ModKey . "+1",       (*) => SwmSend("tiles 1")
+HotKey ModKey . "+2",       (*) => SwmSend("tiles 2")
+HotKey ModKey . "+3",       (*) => SwmSend("tiles 3")
+HotKey ModKey . "+4",       (*) => SwmSend("tiles 4")
 HotKey ModKey . "Enter",    (*) => SwmSend("swap master")
 HotKey ModKey . "+Enter",   (*) => SwmSend("swap secondary")
 HotKey ModKey . "Space",    OpenSearch
