@@ -51,6 +51,8 @@ public sealed class Dispatcher
     private static readonly TimeSpan HighlightKeepaliveInterval = TimeSpan.FromMilliseconds(200);
     private DateTime _lastForegroundReApply = DateTime.MinValue;
     private static readonly TimeSpan ForegroundReApplyDebounce = TimeSpan.FromMilliseconds(150);
+    private DateTime _lastStrayMigration = DateTime.MinValue;
+    private static readonly TimeSpan StrayMigrationInterval = TimeSpan.FromMilliseconds(500);
     private readonly OsdWindow _osd = new();
     // Windows whose CREATE/SHOW arrived while the user was holding the left
     // mouse button — almost always a tab tear (browser is mid-drag,
@@ -191,6 +193,85 @@ public sealed class Dispatcher
             }
             foreach (var k in toReapply) ReApply(_strips[k], bringToFront: false);
         }
+
+        // (4) Stray-window migration. Windows can move between virtual
+        // desktops without firing any event we observe (Win+Ctrl+Shift+Arrow,
+        // Task View drag, "Move to" context menu, third-party tools). If a
+        // tracked window's current desktop no longer matches its strip's key,
+        // focus rotation on the old strip would jump us to that hwnd and the
+        // OS would switch desktops. Periodically sweep and migrate strays.
+        var now2 = DateTime.UtcNow;
+        if (now2 - _lastStrayMigration >= StrayMigrationInterval)
+        {
+            _lastStrayMigration = now2;
+            MigrateStrayWindows();
+        }
+    }
+
+    /// <summary>
+    /// Move any tracked window whose actual virtual desktop differs from its
+    /// strip's key into the correct strip. Called on a slow timer from Poll();
+    /// COM calls into the desktop manager are not free, so we throttle.
+    /// </summary>
+    private void MigrateStrayWindows()
+    {
+        // Snapshot to avoid mutating a strip's list while we iterate it.
+        var moves = new List<(nint hwnd, StripKey from, StripKey to, bool floated)>();
+        foreach (var s in _strips.Values)
+        {
+            foreach (var w in s.Windows)
+            {
+                Guid actual;
+                try { actual = VirtualDesktops.GetDesktopId(w.Hwnd); }
+                catch { continue; }
+                if (actual == Guid.Empty) continue;
+                if (actual != s.Key.DesktopId)
+                    moves.Add((w.Hwnd, s.Key, new StripKey(actual), false));
+            }
+            foreach (var (hwnd, _) in s.Floated)
+            {
+                Guid actual;
+                try { actual = VirtualDesktops.GetDesktopId(hwnd); }
+                catch { continue; }
+                if (actual == Guid.Empty) continue;
+                if (actual != s.Key.DesktopId)
+                    moves.Add((hwnd, s.Key, new StripKey(actual), true));
+            }
+        }
+        if (moves.Count == 0) return;
+
+        var touched = new HashSet<StripKey>();
+        foreach (var (hwnd, from, to, floated) in moves)
+        {
+            var oldStrip = _strips[from];
+            ManagedWindow w;
+            FloatRecord? fr = null;
+            if (floated)
+            {
+                if (!oldStrip.Floated.TryGetValue(hwnd, out var rec)) continue;
+                fr = rec; w = rec.Window;
+                oldStrip.Floated.Remove(hwnd);
+            }
+            else
+            {
+                var idx = oldStrip.IndexOf(hwnd);
+                if (idx < 0) continue;
+                w = oldStrip.Windows[idx];
+                oldStrip.RemoveAt(idx);
+            }
+            var newStrip = GetOrCreate(to);
+            if (floated && fr is not null)
+                newStrip.Floated[hwnd] = fr;
+            else
+                newStrip.Append(w);
+            _hwndToStrip[hwnd] = to;
+            touched.Add(from);
+            touched.Add(to);
+            Console.WriteLine($"swm: migrated 0x{hwnd:X} desk {from.DesktopId} -> {to.DesktopId} (floated={floated})");
+        }
+        foreach (var k in touched)
+            if (_strips.TryGetValue(k, out var s))
+                ReApply(s, bringToFront: false);
     }
 
     /// <summary>
