@@ -470,6 +470,13 @@ public sealed class Dispatcher
                     _pendingTearAdopt.Add(hwnd);
                     break;
                 }
+                if (_hwndToStrip.TryGetValue(hwnd, out var sk))
+                {
+                    // Already tracked, re-shown (e.g. restored from tray
+                    // without firing MINIMIZEEND). Re-tile so it rejoins.
+                    ReApply(_strips[sk], bringToFront: false);
+                    break;
+                }
                 if (TryTrack(hwnd) && _hwndToStrip.TryGetValue(hwnd, out var nk))
                     ReApply(_strips[nk], bringToFront: false);
                 break;
@@ -477,9 +484,16 @@ public sealed class Dispatcher
                 _pendingTearAdopt.Remove(hwnd);
                 Untrack(hwnd);
                 break;
-            // EVENT_OBJECT_HIDE is intentionally ignored: many apps hide their main
-            // window when minimized to tray, and real closes always fire DESTROY too.
-            // Reacting to HIDE caused redundant re-tile passes during close animations.
+            case WinEvents.EVENT_OBJECT_HIDE:
+                // Tracked window became invisible without (yet) being
+                // destroyed — most commonly Electron-style close-to-tray, or
+                // an app that ShowWindow(SW_HIDE)s itself for any reason.
+                // Re-tile so the gap closes; ReApply's skip set excludes
+                // hidden hwnds. Keep it tracked: a later SHOW (tray restore)
+                // brings it back; a real close still fires DESTROY.
+                if (_hwndToStrip.TryGetValue(hwnd, out var hk))
+                    ReApply(_strips[hk], bringToFront: false);
+                break;
             case WinEvents.EVENT_SYSTEM_FOREGROUND:
                 HandleForeground(hwnd);
                 break;
@@ -953,7 +967,15 @@ public sealed class Dispatcher
         var cfg = new LayoutConfig(0, _config.Gap);
         var skip = new HashSet<nint>();
         foreach (var w in s.Windows)
-            if (WindowOps.IsMinimized(w.Hwnd)) skip.Add(w.Hwnd);
+        {
+            if (WindowOps.IsMinimized(w.Hwnd)) { skip.Add(w.Hwnd); continue; }
+            // Hidden but not minimized: app likely close-to-tray'd or
+            // self-hid (Electron apps frequently do this on close). Skip from
+            // layout so the strip packs tightly. Stays tracked so a later
+            // SHOW or restore from tray re-inserts it. A real destroy fires
+            // EVENT_OBJECT_DESTROY which Untrack's the hwnd entirely.
+            if (!WindowOps.IsVisible(w.Hwnd)) skip.Add(w.Hwnd);
+        }
         var rects = Layout.Compute(s, ordered, cfg, skip);
         if (_draggingHwnd != 0) rects.Remove(_draggingHwnd);
         Console.WriteLine($"swm: apply desk={s.Key.DesktopId} rects={rects.Count} focus=0x{(s.Focused?.Hwnd ?? 0):X} scroll={s.ScrollOffsetPx} skipped={skip.Count} bringToFront={bringToFront}");
