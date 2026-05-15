@@ -204,7 +204,30 @@ public sealed class Dispatcher
         if (now2 - _lastStrayMigration >= StrayMigrationInterval)
         {
             _lastStrayMigration = now2;
+            ReapDeadWindows();
             MigrateStrayWindows();
+        }
+    }
+
+    /// <summary>
+    /// Untrack any tracked hwnd that no longer refers to a live window.
+    /// EVENT_OBJECT_DESTROY is unreliable when a process exits abruptly or
+    /// some Electron close paths skip the per-window destroy notification —
+    /// the dead hwnd then lingers in the strip, leaving a phantom slot in
+    /// focus rotation and a visible gap in the layout.
+    /// </summary>
+    private void ReapDeadWindows()
+    {
+        List<nint>? dead = null;
+        foreach (var hwnd in _hwndToStrip.Keys)
+        {
+            if (!WindowOps.Exists(hwnd)) (dead ??= new()).Add(hwnd);
+        }
+        if (dead is null) return;
+        foreach (var hwnd in dead)
+        {
+            Console.WriteLine($"swm: reaped dead hwnd 0x{hwnd:X}");
+            Untrack(hwnd);
         }
     }
 

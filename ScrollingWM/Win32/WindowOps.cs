@@ -40,6 +40,12 @@ public static partial class WindowOps
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool IsWindow(nint hwnd);
+
+    public static bool Exists(nint hwnd) => IsWindow(hwnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool EnumWindows(EnumWindowsProc lpEnumFunc, nint lParam);
 
     [LibraryImport("user32.dll")]
