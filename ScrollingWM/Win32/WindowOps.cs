@@ -327,6 +327,13 @@ public static partial class WindowOps
         if ((ex & WS_EX_NOACTIVATE) != 0) return false;
         if ((ex & WS_EX_TOOLWINDOW) != 0 && (ex & WS_EX_APPWINDOW) == 0) return false;
         if (Title(hwnd).Length == 0) return false;
+        // Reject phantom-sized windows. Real app windows are at least a few
+        // hundred px in both dimensions. Teams (and other Electron-style
+        // apps) sometimes spawn invisible 1x1 or zero-sized helper hwnds
+        // that pass every other check; adopting them creates blank tiles
+        // that never go away because the hwnd technically stays "visible".
+        var r = GetRect(hwnd);
+        if (r.Width < 100 || r.Height < 100) return false;
         return true;
     }
 

@@ -209,9 +209,8 @@ public sealed class Dispatcher
         }
     }
 
-    private readonly Dictionary<nint, DateTime> _firstCloakedAt = new();
-    private readonly Dictionary<nint, DateTime> _firstHiddenAt = new();
-    private static readonly TimeSpan CloakedReapAfter = TimeSpan.FromSeconds(2);
+    private readonly Dictionary<nint, DateTime> _firstSkippableAt = new();
+    private static readonly TimeSpan SkippableReapAfter = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Untrack any tracked hwnd that no longer refers to a live window.
@@ -220,14 +219,13 @@ public sealed class Dispatcher
     /// the dead hwnd then lingers in the strip, leaving a phantom slot in
     /// focus rotation and a visible gap in the layout.
     ///
-    /// Also untrack hwnds that have been invisible (app-cloaked OR hidden
-    /// without minimize) for more than 2s. Teams in particular spawns
-    /// transient top-level hwnds (notification host, in-meeting popups,
-    /// account picker shadows) that briefly pass LooksManageable, get
-    /// adopted, then go quiet without firing HIDE/DESTROY. Until reaped
-    /// they count as navigable slots even though they're invisible.
-    /// Minimized windows are exempt — the user wants those to stay tracked
-    /// so restoring brings them back into the strip.
+    /// Also untrack hwnds that have been continuously "skippable" (cloaked,
+    /// self-hidden, OR rendering at a sub-100px size on the monitor we just
+    /// placed them on) for more than 2 seconds. Teams in particular spawns
+    /// transient top-level hwnds that pass LooksManageable, then either go
+    /// cloaked, hide, or sit at zero size — they're never visibly tileable
+    /// but stay in the focus rotation. Minimized windows are exempt: the
+    /// user expects restoring those to bring them back into the strip.
     /// </summary>
     private void ReapDeadWindows()
     {
@@ -236,28 +234,34 @@ public sealed class Dispatcher
         foreach (var hwnd in _hwndToStrip.Keys)
         {
             if (!WindowOps.Exists(hwnd)) { (dead ??= new()).Add(hwnd); continue; }
-            var minimized = WindowOps.IsMinimized(hwnd);
-            var cloaked = !minimized && WindowOps.IsCloakedByApp(hwnd);
-            var hidden = !minimized && !cloaked && !WindowOps.IsVisible(hwnd);
-            if (cloaked)
+            if (WindowOps.IsMinimized(hwnd))
             {
-                if (!_firstCloakedAt.TryGetValue(hwnd, out var since)) _firstCloakedAt[hwnd] = now;
-                else if (now - since >= CloakedReapAfter) (dead ??= new()).Add(hwnd);
+                _firstSkippableAt.Remove(hwnd);
+                continue;
             }
-            else _firstCloakedAt.Remove(hwnd);
-            if (hidden)
+            bool skippable = WindowOps.IsCloakedByApp(hwnd) || !WindowOps.IsVisible(hwnd);
+            if (!skippable)
             {
-                if (!_firstHiddenAt.TryGetValue(hwnd, out var since)) _firstHiddenAt[hwnd] = now;
-                else if (now - since >= CloakedReapAfter) (dead ??= new()).Add(hwnd);
+                // Also treat sub-100px-in-either-dim as a phantom — we set
+                // tiles to at least ~hundreds of px, so a window that's
+                // resisting our SetWindowPos and sitting at 1x1 is a helper
+                // hwnd we shouldn't have adopted.
+                var r = WindowOps.GetRect(hwnd);
+                if (r.Width < 100 || r.Height < 100) skippable = true;
             }
-            else _firstHiddenAt.Remove(hwnd);
+            if (skippable)
+            {
+                if (!_firstSkippableAt.TryGetValue(hwnd, out var since)) _firstSkippableAt[hwnd] = now;
+                else if (now - since >= SkippableReapAfter) (dead ??= new()).Add(hwnd);
+            }
+            else _firstSkippableAt.Remove(hwnd);
         }
         if (dead is null) return;
         foreach (var hwnd in dead)
         {
-            Console.WriteLine($"swm: reaped hwnd 0x{hwnd:X} (exists={WindowOps.Exists(hwnd)} cloaked={WindowOps.IsCloakedByApp(hwnd)} visible={WindowOps.IsVisible(hwnd)} minimized={WindowOps.IsMinimized(hwnd)})");
-            _firstCloakedAt.Remove(hwnd);
-            _firstHiddenAt.Remove(hwnd);
+            var r = WindowOps.GetRect(hwnd);
+            Console.WriteLine($"swm: reaped hwnd 0x{hwnd:X} (exists={WindowOps.Exists(hwnd)} cloaked={WindowOps.IsCloakedByApp(hwnd)} visible={WindowOps.IsVisible(hwnd)} minimized={WindowOps.IsMinimized(hwnd)} rect={r.Width}x{r.Height})");
+            _firstSkippableAt.Remove(hwnd);
             Untrack(hwnd);
         }
     }
