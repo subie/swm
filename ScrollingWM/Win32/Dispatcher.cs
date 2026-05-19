@@ -793,10 +793,20 @@ public sealed class Dispatcher
     /// focus rotation lands on phantom slots (e.g. Teams cloaks its main
     /// hwnd after a meeting window pops, leaving an empty navigable slot).
     /// </summary>
-    private static bool ShouldSkip(ManagedWindow w) =>
-        WindowOps.IsMinimized(w.Hwnd)
-        || WindowOps.IsCloakedByApp(w.Hwnd)
-        || !WindowOps.IsVisible(w.Hwnd);
+    private static bool ShouldSkip(ManagedWindow w)
+    {
+        if (WindowOps.IsMinimized(w.Hwnd)) return true;
+        if (WindowOps.IsCloakedByApp(w.Hwnd)) return true;
+        if (!WindowOps.IsVisible(w.Hwnd)) return true;
+        // Some apps (notably Teams helper hwnds) accept SetWindowPos and report
+        // success but stay at their native sub-tile size. They aren't cloaked,
+        // aren't hidden, and aren't minimized, so they'd silently consume a
+        // strip slot while being visually invisible — the "empty tile" bug.
+        // Same 100px threshold as LooksManageable; symmetric in and out.
+        var r = WindowOps.GetVisibleRect(w.Hwnd);
+        if (r.Width < 100 || r.Height < 100) return true;
+        return false;
+    }
 
     private static bool IsMin(ManagedWindow w) => ShouldSkip(w);
 
