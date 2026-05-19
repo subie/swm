@@ -63,6 +63,14 @@ public sealed class Dispatcher
     // gap. Defer until the mouse releases — Poll() drains this set.
     private readonly HashSet<nint> _pendingTearAdopt = new();
 
+    // Defer adoption of brand-new windows by a short settle window. Transient
+    // popups (Teams meeting/join windows that self-hide within ~50ms, splash
+    // surfaces, briefly-visible WAM hosts) thereby never get tracked at all —
+    // they never cause the strip to grow a tile and then shrink, which is the
+    // "tiling gap" the user perceives as a flash.
+    private readonly Dictionary<nint, DateTime> _pendingShowAdopt = new();
+    private static readonly TimeSpan ShowAdoptDelay = TimeSpan.FromMilliseconds(300);
+
     public Dispatcher(Config config, string selfExe)
     {
         _config = config;
@@ -181,11 +189,6 @@ public sealed class Dispatcher
 
         // (3) Deferred tear-adoption. Once the user releases the mouse, the
         // browser's drag loop is over and it's safe to track + retile.
-        // Placement uses focused-adjacency (same as any other CREATE) — the
-        // source browser is usually focused, so the torn tab lands next to
-        // it. Cursor-based placement was tried but is unreliable: it can't
-        // be distinguished from a click-spawn where the cursor sits on a
-        // button, not over a drop target.
         if (_pendingTearAdopt.Count > 0 && !WindowOps.IsLeftMouseDown())
         {
             var pending = _pendingTearAdopt.ToArray();
@@ -195,6 +198,34 @@ public sealed class Dispatcher
                 if (TryTrack(hwnd) && _hwndToStrip.TryGetValue(hwnd, out var k))
                     toReapply.Add(k);
             foreach (var k in toReapply) ReApply(_strips[k], bringToFront: false);
+        }
+
+        // (3b) Settle-delayed CREATE/SHOW adoption. Windows queued by the
+        // SHOW/CREATE handler get adopted only after ShowAdoptDelay elapses
+        // and the window is still alive + visible + not cloaked. Transient
+        // Teams meeting/join popups self-hide well within the delay window
+        // and never get tracked — no momentary 5-tile layout, no flash.
+        if (_pendingShowAdopt.Count > 0)
+        {
+            var nowShow = DateTime.UtcNow;
+            var ready = new List<nint>();
+            foreach (var (hwnd, since) in _pendingShowAdopt)
+                if (nowShow - since >= ShowAdoptDelay) ready.Add(hwnd);
+            if (ready.Count > 0)
+            {
+                var toReapply = new HashSet<StripKey>();
+                foreach (var hwnd in ready)
+                {
+                    _pendingShowAdopt.Remove(hwnd);
+                    if (!WindowOps.Exists(hwnd)) continue;
+                    if (!WindowOps.IsVisible(hwnd)) continue;
+                    if (WindowOps.IsCloakedByApp(hwnd)) continue;
+                    if (_hwndToStrip.ContainsKey(hwnd)) continue;
+                    if (TryTrack(hwnd) && _hwndToStrip.TryGetValue(hwnd, out var k))
+                        toReapply.Add(k);
+                }
+                foreach (var k in toReapply) ReApply(_strips[k], bringToFront: false);
+            }
         }
 
         // (4) Stray-window migration. Windows can move between virtual
@@ -523,11 +554,14 @@ public sealed class Dispatcher
                     ReApply(_strips[sk], bringToFront: false);
                     break;
                 }
-                if (TryTrack(hwnd) && _hwndToStrip.TryGetValue(hwnd, out var nk))
-                    ReApply(_strips[nk], bringToFront: false);
+                // Defer adoption by ShowAdoptDelay. If the window self-hides
+                // or is destroyed during the wait it never enters a strip,
+                // sparing the visible layout the grow-then-shrink flash.
+                _pendingShowAdopt[hwnd] = DateTime.UtcNow;
                 break;
             case WinEvents.EVENT_OBJECT_DESTROY:
                 _pendingTearAdopt.Remove(hwnd);
+                _pendingShowAdopt.Remove(hwnd);
                 Untrack(hwnd);
                 break;
             case WinEvents.EVENT_OBJECT_HIDE:
@@ -537,6 +571,7 @@ public sealed class Dispatcher
                 // Re-tile so the gap closes; ReApply's skip set excludes
                 // hidden hwnds. Keep it tracked: a later SHOW (tray restore)
                 // brings it back; a real close still fires DESTROY.
+                _pendingShowAdopt.Remove(hwnd);
                 if (_hwndToStrip.TryGetValue(hwnd, out var hk))
                     ReApply(_strips[hk], bringToFront: false);
                 break;
@@ -594,9 +629,18 @@ public sealed class Dispatcher
         // often fire EVENT_OBJECT_SHOW while still cloaked or with an empty
         // title, so TryTrack rejects them on first sight and no follow-up SHOW
         // is guaranteed. By the time the user activates one it's fully visible
-        // — adopt it here so we don't permanently leak it.
-        if (!_hwndToStrip.ContainsKey(hwnd) && WindowOps.LooksManageable(hwnd) && TryTrack(hwnd))
-            Console.WriteLine($"swm: HandleForeground adopted late-arriving hwnd=0x{hwnd:X} title='{WindowOps.Title(hwnd)}'");
+        // Late-adoption: if a window the user just focused isn't tracked yet,
+        // route it through the same settle-delayed adoption queue used by
+        // CREATE/SHOW. That way a Teams meeting window briefly grabbing
+        // foreground doesn't bypass the defer and cause a flash.
+        if (!_hwndToStrip.ContainsKey(hwnd) && WindowOps.LooksManageable(hwnd))
+        {
+            if (!_pendingShowAdopt.ContainsKey(hwnd))
+            {
+                _pendingShowAdopt[hwnd] = DateTime.UtcNow;
+                Console.WriteLine($"swm: HandleForeground deferred late-arriving hwnd=0x{hwnd:X} title='{WindowOps.Title(hwnd)}'");
+            }
+        }
 
         if (!_hwndToStrip.TryGetValue(hwnd, out var key)) return;
         var s = _strips[key];
