@@ -188,7 +188,7 @@ public sealed class Dispatcher
             var toReapply = new HashSet<StripKey>();
             foreach (var hwnd in pending)
             {
-                if (TryTrack(hwnd) && _hwndToStrip.TryGetValue(hwnd, out var k))
+                if (TryTrack(hwnd, useCursor: true) && _hwndToStrip.TryGetValue(hwnd, out var k))
                     toReapply.Add(k);
             }
             foreach (var k in toReapply) ReApply(_strips[k], bringToFront: false);
@@ -378,7 +378,7 @@ public sealed class Dispatcher
         "LockApp.exe",
     };
 
-    private bool TryTrack(nint hwnd)
+    private bool TryTrack(nint hwnd, bool useCursor = false)
     {
         if (_hwndToStrip.ContainsKey(hwnd)) return false;
         if (!WindowOps.LooksManageable(hwnd)) return false;
@@ -402,11 +402,20 @@ public sealed class Dispatcher
         }
         else
         {
-            strip.Insert(CursorIndexIn(strip, excludeHwnd: 0), w);
+            // For programmatic spawns (an app opened a new window), insert
+            // adjacent to the currently focused tile — that's almost always
+            // the parent window. Cursor-based placement is only correct
+            // when the user actually positioned the cursor for a drop,
+            // which means a just-released drag (deferred tear adoption).
+            int insertAt;
+            if (useCursor) insertAt = CursorIndexIn(strip, excludeHwnd: 0);
+            else if (strip.FocusedIndex >= 0) insertAt = strip.FocusedIndex + 1;
+            else insertAt = strip.Windows.Count;
+            strip.Insert(insertAt, w);
             floated = false;
         }
         _hwndToStrip[hwnd] = key;
-        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated}");
+        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated} useCursor={useCursor}");
         return true;
     }
 
