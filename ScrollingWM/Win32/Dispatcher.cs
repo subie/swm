@@ -347,7 +347,7 @@ public sealed class Dispatcher
         {
             Console.WriteLine($"swm: strip desk={s.Key.DesktopId}: {s.Windows.Count} tiled, {s.Floated.Count} floated");
             foreach (var w in s.Windows)
-                Console.WriteLine($"swm:   tiled hwnd=0x{w.Hwnd:X} exe={w.ExeName} title='{WindowOps.Title(w.Hwnd)}'");
+                Console.WriteLine($"swm:   tiled hwnd=0x{w.Hwnd:X} exe={w.ExeName} title='{WindowOps.Title(w.Hwnd)}' {WindowOps.DescribeStyle(w.Hwnd)}");
             foreach (var (h, r) in s.Floated)
                 Console.WriteLine($"swm:   float hwnd=0x{h:X} exe={r.Window.ExeName} title='{WindowOps.Title(h)}'");
         }
@@ -418,7 +418,7 @@ public sealed class Dispatcher
             floated = false;
         }
         _hwndToStrip[hwnd] = key;
-        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated}");
+        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated} {WindowOps.DescribeStyle(hwnd)}");
         return true;
     }
 

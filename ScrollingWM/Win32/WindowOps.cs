@@ -173,6 +173,46 @@ public static partial class WindowOps
 
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
+    private const long WS_EX_LAYERED = 0x00080000L;
+    private const long WS_EX_TRANSPARENT = 0x00000020L;
+    private const long WS_EX_NOREDIRECTIONBITMAP = 0x00200000L;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetLayeredWindowAttributes(nint hwnd, out uint pcrKey, out byte pbAlpha, out uint pdwFlags);
+
+    [LibraryImport("user32.dll")]
+    private static partial nint GetWindow(nint hwnd, uint cmd);
+    private const uint GW_OWNER = 4;
+
+    /// <summary>
+    /// Compact descriptor for diagnostics: which style bits are set on the window,
+    /// owner handle, layered alpha if applicable. Lets us tell phantom helper
+    /// windows apart from legit main windows when they otherwise look identical
+    /// to LooksManageable / ShouldSkip.
+    /// </summary>
+    public static string DescribeStyle(nint hwnd)
+    {
+        var ex = ExStyle(hwnd);
+        var owner = GetWindow(hwnd, GW_OWNER);
+        string layered = "";
+        if ((ex & WS_EX_LAYERED) != 0)
+        {
+            if (GetLayeredWindowAttributes(hwnd, out _, out var alpha, out var flags))
+                layered = $" layered(alpha={alpha} flags={flags:X})";
+            else
+                layered = " layered(noattr)";
+        }
+        var flagsList = new List<string>();
+        if ((ex & WS_EX_LAYERED) != 0) flagsList.Add("LAYERED");
+        if ((ex & WS_EX_TRANSPARENT) != 0) flagsList.Add("TRANSPARENT");
+        if ((ex & WS_EX_NOREDIRECTIONBITMAP) != 0) flagsList.Add("NOREDIR");
+        if ((ex & WS_EX_TOOLWINDOW) != 0) flagsList.Add("TOOL");
+        if ((ex & WS_EX_APPWINDOW) != 0) flagsList.Add("APP");
+        if ((ex & WS_EX_NOACTIVATE) != 0) flagsList.Add("NOACTIVATE");
+        return $"ex={string.Join("|", flagsList)} owner=0x{owner:X}{layered}";
+    }
+
     private const uint SWP_NOSENDCHANGING = 0x0400;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOSIZE = 0x0001;
