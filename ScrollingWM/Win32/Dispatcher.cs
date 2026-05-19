@@ -209,59 +209,22 @@ public sealed class Dispatcher
         }
     }
 
-    private readonly Dictionary<nint, DateTime> _firstSkippableAt = new();
-    private static readonly TimeSpan SkippableReapAfter = TimeSpan.FromSeconds(2);
-
     /// <summary>
     /// Untrack any tracked hwnd that no longer refers to a live window.
     /// EVENT_OBJECT_DESTROY is unreliable when a process exits abruptly or
     /// some Electron close paths skip the per-window destroy notification —
     /// the dead hwnd then lingers in the strip, leaving a phantom slot in
     /// focus rotation and a visible gap in the layout.
-    ///
-    /// Also untrack hwnds that have been continuously "skippable" (cloaked,
-    /// self-hidden, OR rendering at a sub-100px size on the monitor we just
-    /// placed them on) for more than 2 seconds. Teams in particular spawns
-    /// transient top-level hwnds that pass LooksManageable, then either go
-    /// cloaked, hide, or sit at zero size — they're never visibly tileable
-    /// but stay in the focus rotation. Minimized windows are exempt: the
-    /// user expects restoring those to bring them back into the strip.
     /// </summary>
     private void ReapDeadWindows()
     {
         List<nint>? dead = null;
-        var now = DateTime.UtcNow;
         foreach (var hwnd in _hwndToStrip.Keys)
-        {
-            if (!WindowOps.Exists(hwnd)) { (dead ??= new()).Add(hwnd); continue; }
-            if (WindowOps.IsMinimized(hwnd))
-            {
-                _firstSkippableAt.Remove(hwnd);
-                continue;
-            }
-            bool skippable = WindowOps.IsCloakedByApp(hwnd) || !WindowOps.IsVisible(hwnd);
-            if (!skippable)
-            {
-                // Also treat sub-100px-in-either-dim as a phantom — we set
-                // tiles to at least ~hundreds of px, so a window that's
-                // resisting our SetWindowPos and sitting at 1x1 is a helper
-                // hwnd we shouldn't have adopted.
-                var r = WindowOps.GetRect(hwnd);
-                if (r.Width < 100 || r.Height < 100) skippable = true;
-            }
-            if (skippable)
-            {
-                if (!_firstSkippableAt.TryGetValue(hwnd, out var since)) _firstSkippableAt[hwnd] = now;
-                else if (now - since >= SkippableReapAfter) (dead ??= new()).Add(hwnd);
-            }
-            else _firstSkippableAt.Remove(hwnd);
-        }
+            if (!WindowOps.Exists(hwnd)) (dead ??= new()).Add(hwnd);
         if (dead is null) return;
         foreach (var hwnd in dead)
         {
-            var r = WindowOps.GetRect(hwnd);
-            Console.WriteLine($"swm: reaped hwnd 0x{hwnd:X} (exists={WindowOps.Exists(hwnd)} cloaked={WindowOps.IsCloakedByApp(hwnd)} visible={WindowOps.IsVisible(hwnd)} minimized={WindowOps.IsMinimized(hwnd)} rect={r.Width}x{r.Height})");
-            _firstSkippableAt.Remove(hwnd);
+            Console.WriteLine($"swm: reaped dead hwnd 0x{hwnd:X}");
             Untrack(hwnd);
         }
     }
