@@ -290,7 +290,17 @@ public sealed class Dispatcher
             if (floated && fr is not null)
                 newStrip.Floated[hwnd] = fr;
             else
-                newStrip.Append(w);
+            {
+                // Place adjacent to whatever's currently focused on the
+                // destination strip — same rule as TryTrack. Append-to-end
+                // throws migrated programmatic spawns (Teams "Join" that
+                // briefly registered on the wrong virtual-desktop guid)
+                // off the end of the scroll reel.
+                var insertAt = newStrip.FocusedIndex >= 0
+                    ? newStrip.FocusedIndex + 1
+                    : newStrip.Windows.Count;
+                newStrip.Insert(insertAt, w);
+            }
             _hwndToStrip[hwnd] = to;
             touched.Add(from);
             touched.Add(to);
