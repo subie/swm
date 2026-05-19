@@ -177,6 +177,35 @@ public static partial class WindowOps
     private const long WS_EX_TRANSPARENT = 0x00000020L;
     private const long WS_EX_NOREDIRECTIONBITMAP = 0x00200000L;
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TITLEBARINFO
+    {
+        public uint cbSize;
+        public RECT rcTitleBar;
+        public uint rgstate0; public uint rgstate1; public uint rgstate2;
+        public uint rgstate3; public uint rgstate4; public uint rgstate5;
+    }
+    private const uint STATE_SYSTEM_INVISIBLE = 0x00008000;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetTitleBarInfo(nint hwnd, ref TITLEBARINFO pti);
+
+    /// <summary>
+    /// True when the OS reports the window's title bar as invisible. Renderless
+    /// helper windows (Teams' background WebView2 hosts, some Electron splash
+    /// surrogates) keep WS_VISIBLE set and report a full DWM frame, but their
+    /// title bar carries STATE_SYSTEM_INVISIBLE — the same signal Microsoft's
+    /// "is alt-tab visible?" recipe uses to skip them. Catches the
+    /// post-tile phantoms that pass every other liveness check.
+    /// </summary>
+    public static bool TitleBarInvisible(nint hwnd)
+    {
+        var ti = new TITLEBARINFO { cbSize = (uint)Marshal.SizeOf<TITLEBARINFO>() };
+        if (!GetTitleBarInfo(hwnd, ref ti)) return false;
+        return (ti.rgstate0 & STATE_SYSTEM_INVISIBLE) != 0;
+    }
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetLayeredWindowAttributes(nint hwnd, out uint pcrKey, out byte pbAlpha, out uint pdwFlags);
@@ -210,6 +239,7 @@ public static partial class WindowOps
         if ((ex & WS_EX_TOOLWINDOW) != 0) flagsList.Add("TOOL");
         if ((ex & WS_EX_APPWINDOW) != 0) flagsList.Add("APP");
         if ((ex & WS_EX_NOACTIVATE) != 0) flagsList.Add("NOACTIVATE");
+        if (TitleBarInvisible(hwnd)) flagsList.Add("TB-INVIS");
         return $"ex={string.Join("|", flagsList)} owner=0x{owner:X}{layered}";
     }
 
@@ -374,6 +404,7 @@ public static partial class WindowOps
         // that never go away because the hwnd technically stays "visible".
         var r = GetRect(hwnd);
         if (r.Width < 100 || r.Height < 100) return false;
+        if (TitleBarInvisible(hwnd)) return false;
         return true;
     }
 

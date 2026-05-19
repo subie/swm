@@ -795,6 +795,11 @@ public sealed class Dispatcher
         // Same 100px threshold as LooksManageable; symmetric in and out.
         var r = WindowOps.GetVisibleRect(w.Hwnd);
         if (r.Width < 100 || r.Height < 100) return true;
+        // Renderless helpers (Teams background WebView2 hosts) accept our
+        // SetWindowPos and report a full frame but their title bar is
+        // STATE_SYSTEM_INVISIBLE. Same check at adoption + on every layout
+        // pass — symmetric protection in case a window flips state later.
+        if (WindowOps.TitleBarInvisible(w.Hwnd)) return true;
         return false;
     }
 
