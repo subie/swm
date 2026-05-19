@@ -762,7 +762,20 @@ public sealed class Dispatcher
         return null;
     }
 
-    private static bool IsMin(ManagedWindow w) => WindowOps.IsMinimized(w.Hwnd);
+    /// <summary>
+    /// Tracked windows that shouldn't occupy a tile slot in the strip
+    /// (minimized, app-cloaked, or self-hidden). Used by both the layout
+    /// skip set and the focus/swap navigation predicates so the visible
+    /// tile count and the navigable count stay in lockstep — otherwise
+    /// focus rotation lands on phantom slots (e.g. Teams cloaks its main
+    /// hwnd after a meeting window pops, leaving an empty navigable slot).
+    /// </summary>
+    private static bool ShouldSkip(ManagedWindow w) =>
+        WindowOps.IsMinimized(w.Hwnd)
+        || WindowOps.IsCloakedByApp(w.Hwnd)
+        || !WindowOps.IsVisible(w.Hwnd);
+
+    private static bool IsMin(ManagedWindow w) => ShouldSkip(w);
 
     private string DoFocus(string arg)
     {
@@ -991,13 +1004,10 @@ public sealed class Dispatcher
         var skip = new HashSet<nint>();
         foreach (var w in s.Windows)
         {
-            if (WindowOps.IsMinimized(w.Hwnd)) { skip.Add(w.Hwnd); continue; }
-            // Hidden but not minimized: app likely close-to-tray'd or
-            // self-hid (Electron apps frequently do this on close). Skip from
-            // layout so the strip packs tightly. Stays tracked so a later
-            // SHOW or restore from tray re-inserts it. A real destroy fires
-            // EVENT_OBJECT_DESTROY which Untrack's the hwnd entirely.
-            if (!WindowOps.IsVisible(w.Hwnd)) skip.Add(w.Hwnd);
+            // Unified rule with focus navigation: minimized, app-cloaked
+            // (e.g. Teams' main hwnd after a meeting window pops), or
+            // self-hidden (Electron close-to-tray) windows don't get a slot.
+            if (ShouldSkip(w)) skip.Add(w.Hwnd);
         }
         var rects = Layout.Compute(s, ordered, cfg, skip);
         if (_draggingHwnd != 0) rects.Remove(_draggingHwnd);
