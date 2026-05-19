@@ -181,26 +181,19 @@ public sealed class Dispatcher
 
         // (3) Deferred tear-adoption. Once the user releases the mouse, the
         // browser's drag loop is over and it's safe to track + retile.
+        // Placement uses focused-adjacency (same as any other CREATE) — the
+        // source browser is usually focused, so the torn tab lands next to
+        // it. Cursor-based placement was tried but is unreliable: it can't
+        // be distinguished from a click-spawn where the cursor sits on a
+        // button, not over a drop target.
         if (_pendingTearAdopt.Count > 0 && !WindowOps.IsLeftMouseDown())
         {
             var pending = _pendingTearAdopt.ToArray();
             _pendingTearAdopt.Clear();
             var toReapply = new HashSet<StripKey>();
             foreach (var hwnd in pending)
-            {
-                // True tab tear: the window is being dragged, so at release
-                // its rect contains the cursor — useCursor places it where
-                // the user dropped it. Click-spawn (e.g. Teams "Join" pops a
-                // window after a brief mouse-down): the new window appears
-                // at its own coordinates, unrelated to where the user
-                // clicked. Use focused-adjacency in that case.
-                var (cx, cy) = WindowOps.CursorPos();
-                var r = WindowOps.GetRect(hwnd);
-                var useCursor = r.Width > 0 && cx >= r.Left && cx < r.Right
-                    && cy >= r.Top && cy < r.Bottom;
-                if (TryTrack(hwnd, useCursor: useCursor) && _hwndToStrip.TryGetValue(hwnd, out var k))
+                if (TryTrack(hwnd) && _hwndToStrip.TryGetValue(hwnd, out var k))
                     toReapply.Add(k);
-            }
             foreach (var k in toReapply) ReApply(_strips[k], bringToFront: false);
         }
 
@@ -391,7 +384,7 @@ public sealed class Dispatcher
         "LockApp.exe",
     };
 
-    private bool TryTrack(nint hwnd, bool useCursor = false)
+    private bool TryTrack(nint hwnd)
     {
         if (_hwndToStrip.ContainsKey(hwnd)) return false;
         if (!WindowOps.LooksManageable(hwnd)) return false;
@@ -415,20 +408,17 @@ public sealed class Dispatcher
         }
         else
         {
-            // For programmatic spawns (an app opened a new window), insert
-            // adjacent to the currently focused tile — that's almost always
-            // the parent window. Cursor-based placement is only correct
-            // when the user actually positioned the cursor for a drop,
-            // which means a just-released drag (deferred tear adoption).
-            int insertAt;
-            if (useCursor) insertAt = CursorIndexIn(strip, excludeHwnd: 0);
-            else if (strip.FocusedIndex >= 0) insertAt = strip.FocusedIndex + 1;
-            else insertAt = strip.Windows.Count;
+            // Insert adjacent to the focused tile. For programmatic spawns
+            // (Teams Join, "New Window" menu) that's the parent; for a
+            // released tab-tear it's the source browser. Cursor-based
+            // placement at adoption time is unreliable: the cursor sits on
+            // a button for click-spawns, not over a drop target.
+            var insertAt = strip.FocusedIndex >= 0 ? strip.FocusedIndex + 1 : strip.Windows.Count;
             strip.Insert(insertAt, w);
             floated = false;
         }
         _hwndToStrip[hwnd] = key;
-        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated} useCursor={useCursor}");
+        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated}");
         return true;
     }
 
