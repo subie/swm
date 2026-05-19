@@ -188,7 +188,17 @@ public sealed class Dispatcher
             var toReapply = new HashSet<StripKey>();
             foreach (var hwnd in pending)
             {
-                if (TryTrack(hwnd, useCursor: true) && _hwndToStrip.TryGetValue(hwnd, out var k))
+                // True tab tear: the window is being dragged, so at release
+                // its rect contains the cursor — useCursor places it where
+                // the user dropped it. Click-spawn (e.g. Teams "Join" pops a
+                // window after a brief mouse-down): the new window appears
+                // at its own coordinates, unrelated to where the user
+                // clicked. Use focused-adjacency in that case.
+                var (cx, cy) = WindowOps.CursorPos();
+                var r = WindowOps.GetRect(hwnd);
+                var useCursor = r.Width > 0 && cx >= r.Left && cx < r.Right
+                    && cy >= r.Top && cy < r.Bottom;
+                if (TryTrack(hwnd, useCursor: useCursor) && _hwndToStrip.TryGetValue(hwnd, out var k))
                     toReapply.Add(k);
             }
             foreach (var k in toReapply) ReApply(_strips[k], bringToFront: false);
@@ -236,20 +246,23 @@ public sealed class Dispatcher
     /// </summary>
     private void MigrateStrayWindows()
     {
-        // Snapshot to avoid mutating a strip's list while we iterate it.
+        // GetDesktopId is a COM call that pumps messages, which can fire
+        // WinEvent callbacks reentrantly and mutate strip lists. Snapshot
+        // every collection we touch before the COM-bearing loops.
+        var stripsSnapshot = _strips.Values.ToList();
         var moves = new List<(nint hwnd, StripKey from, StripKey to, bool floated)>();
-        foreach (var s in _strips.Values)
+        foreach (var s in stripsSnapshot)
         {
-            foreach (var w in s.Windows)
+            foreach (var hwnd in s.Windows.Select(w => w.Hwnd).ToArray())
             {
                 Guid actual;
-                try { actual = VirtualDesktops.GetDesktopId(w.Hwnd); }
+                try { actual = VirtualDesktops.GetDesktopId(hwnd); }
                 catch { continue; }
                 if (actual == Guid.Empty) continue;
                 if (actual != s.Key.DesktopId)
-                    moves.Add((w.Hwnd, s.Key, new StripKey(actual), false));
+                    moves.Add((hwnd, s.Key, new StripKey(actual), false));
             }
-            foreach (var (hwnd, _) in s.Floated)
+            foreach (var hwnd in s.Floated.Keys.ToArray())
             {
                 Guid actual;
                 try { actual = VirtualDesktops.GetDesktopId(hwnd); }
