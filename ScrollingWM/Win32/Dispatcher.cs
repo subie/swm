@@ -209,24 +209,55 @@ public sealed class Dispatcher
         }
     }
 
+    private readonly Dictionary<nint, DateTime> _firstCloakedAt = new();
+    private readonly Dictionary<nint, DateTime> _firstHiddenAt = new();
+    private static readonly TimeSpan CloakedReapAfter = TimeSpan.FromSeconds(2);
+
     /// <summary>
     /// Untrack any tracked hwnd that no longer refers to a live window.
     /// EVENT_OBJECT_DESTROY is unreliable when a process exits abruptly or
     /// some Electron close paths skip the per-window destroy notification —
     /// the dead hwnd then lingers in the strip, leaving a phantom slot in
     /// focus rotation and a visible gap in the layout.
+    ///
+    /// Also untrack hwnds that have been invisible (app-cloaked OR hidden
+    /// without minimize) for more than 2s. Teams in particular spawns
+    /// transient top-level hwnds (notification host, in-meeting popups,
+    /// account picker shadows) that briefly pass LooksManageable, get
+    /// adopted, then go quiet without firing HIDE/DESTROY. Until reaped
+    /// they count as navigable slots even though they're invisible.
+    /// Minimized windows are exempt — the user wants those to stay tracked
+    /// so restoring brings them back into the strip.
     /// </summary>
     private void ReapDeadWindows()
     {
         List<nint>? dead = null;
+        var now = DateTime.UtcNow;
         foreach (var hwnd in _hwndToStrip.Keys)
         {
-            if (!WindowOps.Exists(hwnd)) (dead ??= new()).Add(hwnd);
+            if (!WindowOps.Exists(hwnd)) { (dead ??= new()).Add(hwnd); continue; }
+            var minimized = WindowOps.IsMinimized(hwnd);
+            var cloaked = !minimized && WindowOps.IsCloakedByApp(hwnd);
+            var hidden = !minimized && !cloaked && !WindowOps.IsVisible(hwnd);
+            if (cloaked)
+            {
+                if (!_firstCloakedAt.TryGetValue(hwnd, out var since)) _firstCloakedAt[hwnd] = now;
+                else if (now - since >= CloakedReapAfter) (dead ??= new()).Add(hwnd);
+            }
+            else _firstCloakedAt.Remove(hwnd);
+            if (hidden)
+            {
+                if (!_firstHiddenAt.TryGetValue(hwnd, out var since)) _firstHiddenAt[hwnd] = now;
+                else if (now - since >= CloakedReapAfter) (dead ??= new()).Add(hwnd);
+            }
+            else _firstHiddenAt.Remove(hwnd);
         }
         if (dead is null) return;
         foreach (var hwnd in dead)
         {
-            Console.WriteLine($"swm: reaped dead hwnd 0x{hwnd:X}");
+            Console.WriteLine($"swm: reaped hwnd 0x{hwnd:X} (exists={WindowOps.Exists(hwnd)} cloaked={WindowOps.IsCloakedByApp(hwnd)} visible={WindowOps.IsVisible(hwnd)} minimized={WindowOps.IsMinimized(hwnd)})");
+            _firstCloakedAt.Remove(hwnd);
+            _firstHiddenAt.Remove(hwnd);
             Untrack(hwnd);
         }
     }
@@ -396,16 +427,19 @@ public sealed class Dispatcher
         _originalRects[hwnd] = rect;
         StateFile.Write(_originalRects);
         var w = new ManagedWindow(hwnd, exe, cls, ResolveWindowWidth(hwnd));
-        // Float if (a) a user rule matches, or (b) the window declares itself
-        // non-resizable. Non-resizable windows are dialogs / pickers / fixed-
-        // size utilities that break when SetWindowPos changes their dimensions
-        // (account pickers, file/print dialogs, About boxes, ...). Tiling them
-        // would violate the WS_THICKFRAME/WS_MAXIMIZEBOX contract they set.
+        bool floated;
         if (MatchesFloatRule(exe, cls, title) || !WindowOps.IsResizable(hwnd))
+        {
             strip.Floated[hwnd] = new FloatRecord(w, strip.Windows.Count, rect);
+            floated = true;
+        }
         else
+        {
             strip.Insert(CursorIndexIn(strip, excludeHwnd: 0), w);
+            floated = false;
+        }
         _hwndToStrip[hwnd] = key;
+        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated}");
         return true;
     }
 
