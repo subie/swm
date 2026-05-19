@@ -1025,16 +1025,26 @@ public sealed class Dispatcher
         var ordered = OrderedMonitors();
         var cfg = new LayoutConfig(0, _config.Gap);
         var skip = new HashSet<nint>();
+        var skipReasons = new List<string>();
         foreach (var w in s.Windows)
         {
             // Unified rule with focus navigation: minimized, app-cloaked
             // (e.g. Teams' main hwnd after a meeting window pops), or
             // self-hidden (Electron close-to-tray) windows don't get a slot.
-            if (ShouldSkip(w)) skip.Add(w.Hwnd);
+            if (ShouldSkip(w))
+            {
+                skip.Add(w.Hwnd);
+                string why = WindowOps.IsMinimized(w.Hwnd) ? "min"
+                    : WindowOps.IsCloakedByApp(w.Hwnd) ? "cloaked"
+                    : !WindowOps.IsVisible(w.Hwnd) ? "hidden"
+                    : "other";
+                skipReasons.Add($"0x{w.Hwnd:X}({w.ExeName},{why})");
+            }
         }
         var rects = Layout.Compute(s, ordered, cfg, skip);
         if (_draggingHwnd != 0) rects.Remove(_draggingHwnd);
-        Console.WriteLine($"swm: apply desk={s.Key.DesktopId} rects={rects.Count} focus=0x{(s.Focused?.Hwnd ?? 0):X} scroll={s.ScrollOffsetPx} skipped={skip.Count} bringToFront={bringToFront}");
+        var skipDesc = skipReasons.Count == 0 ? "" : $" skipHwnds=[{string.Join(",", skipReasons)}]";
+        Console.WriteLine($"swm: apply desk={s.Key.DesktopId} rects={rects.Count} focus=0x{(s.Focused?.Hwnd ?? 0):X} scroll={s.ScrollOffsetPx} skipped={skip.Count} bringToFront={bringToFront}{skipDesc}");
         _applier.Apply(rects, s.Focused?.Hwnd ?? 0, bringToFront);
         // Floats live above tiles in z-order. Since Apply may have raised the
         // focused tile to HWND_TOP, push every float back above it. NOACTIVATE
