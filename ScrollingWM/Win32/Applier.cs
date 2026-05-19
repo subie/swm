@@ -5,7 +5,6 @@ namespace ScrollingWM.Win32;
 public sealed class Applier
 {
     private readonly Dictionary<nint, Rect> _last = new();
-    public IReadOnlyDictionary<nint, Rect> LastTargets => _last;
 
     public void Apply(IReadOnlyDictionary<nint, Rect> target, nint focusedHwnd, bool bringToFront = true)
     {
@@ -46,12 +45,7 @@ public sealed class Applier
                 foreach (var (hwnd, rect) in changes) WindowOps.Move(hwnd, rect);
             }
             foreach (var (hwnd, rect) in changes)
-            {
-                var settled = WindowOps.GetVisibleRect(hwnd);
-                var resisted = settled != rect;
-                Console.WriteLine($"swm:   move 0x{hwnd:X} -> ({rect.Left},{rect.Top} {rect.Width}x{rect.Height})"
-                    + (resisted ? $" RESISTED actual=({settled.Left},{settled.Top} {settled.Width}x{settled.Height})" : ""));
-            }
+                Console.WriteLine($"swm:   move 0x{hwnd:X} -> ({rect.Left},{rect.Top} {rect.Width}x{rect.Height})");
             Console.WriteLine($"swm: applier: {changes.Count} moved (batched={batchOk})");
         }
 

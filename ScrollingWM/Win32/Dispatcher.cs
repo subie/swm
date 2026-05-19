@@ -219,61 +219,22 @@ public sealed class Dispatcher
         }
     }
 
-    private readonly Dictionary<nint, DateTime> _firstResistingAt = new();
-    private static readonly TimeSpan ResistReapAfter = TimeSpan.FromSeconds(3);
-
     /// <summary>
     /// Untrack any tracked hwnd that no longer refers to a live window.
     /// EVENT_OBJECT_DESTROY is unreliable when a process exits abruptly or
     /// some Electron close paths skip the per-window destroy notification —
     /// the dead hwnd then lingers in the strip, leaving a phantom slot in
     /// focus rotation and a visible gap in the layout.
-    ///
-    /// Also untrack hwnds that have been continuously resisting our layout
-    /// for 3+ seconds: their actual rect differs from where we last placed
-    /// them. Teams meeting/join windows sometimes accept SetWindowPos then
-    /// move themselves back to their own coordinates, leaving an empty
-    /// slot in the strip with nothing visible.
     /// </summary>
     private void ReapDeadWindows()
     {
         List<nint>? dead = null;
-        var now = DateTime.UtcNow;
-        var targets = _applier.LastTargets;
         foreach (var hwnd in _hwndToStrip.Keys)
-        {
-            if (!WindowOps.Exists(hwnd)) { (dead ??= new()).Add(hwnd); continue; }
-            if (WindowOps.IsMinimized(hwnd))
-            {
-                _firstResistingAt.Remove(hwnd);
-                continue;
-            }
-            if (!targets.TryGetValue(hwnd, out var target))
-            {
-                _firstResistingAt.Remove(hwnd);
-                continue;
-            }
-            var actual = WindowOps.GetVisibleRect(hwnd);
-            // Allow a few px slack for DWM rounding and non-resizable steps.
-            bool resisting = Math.Abs(actual.Left - target.Left) > 10
-                || Math.Abs(actual.Top - target.Top) > 10
-                || Math.Abs(actual.Width - target.Width) > 10
-                || Math.Abs(actual.Height - target.Height) > 10;
-            if (resisting)
-            {
-                if (!_firstResistingAt.TryGetValue(hwnd, out var since))
-                    _firstResistingAt[hwnd] = now;
-                else if (now - since >= ResistReapAfter)
-                    (dead ??= new()).Add(hwnd);
-            }
-            else _firstResistingAt.Remove(hwnd);
-        }
+            if (!WindowOps.Exists(hwnd)) (dead ??= new()).Add(hwnd);
         if (dead is null) return;
         foreach (var hwnd in dead)
         {
-            var r = WindowOps.GetRect(hwnd);
-            Console.WriteLine($"swm: reaped hwnd 0x{hwnd:X} title='{WindowOps.Title(hwnd)}' (exists={WindowOps.Exists(hwnd)} rect={r.Width}x{r.Height})");
-            _firstResistingAt.Remove(hwnd);
+            Console.WriteLine($"swm: reaped dead hwnd 0x{hwnd:X}");
             Untrack(hwnd);
         }
     }
