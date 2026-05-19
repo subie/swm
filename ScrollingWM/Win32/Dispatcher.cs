@@ -357,7 +357,7 @@ public sealed class Dispatcher
         {
             Console.WriteLine($"swm: strip desk={s.Key.DesktopId}: {s.Windows.Count} tiled, {s.Floated.Count} floated");
             foreach (var w in s.Windows)
-                Console.WriteLine($"swm:   tiled hwnd=0x{w.Hwnd:X} exe={w.ExeName} title='{WindowOps.Title(w.Hwnd)}' {WindowOps.DescribeStyle(w.Hwnd)}");
+                Console.WriteLine($"swm:   tiled hwnd=0x{w.Hwnd:X} exe={w.ExeName} title='{WindowOps.Title(w.Hwnd)}'");
             foreach (var (h, r) in s.Floated)
                 Console.WriteLine($"swm:   float hwnd=0x{h:X} exe={r.Window.ExeName} title='{WindowOps.Title(h)}'");
         }
@@ -428,7 +428,7 @@ public sealed class Dispatcher
             floated = false;
         }
         _hwndToStrip[hwnd] = key;
-        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated} {WindowOps.DescribeStyle(hwnd)}");
+        Console.WriteLine($"swm: tracked 0x{hwnd:X} exe='{exe}' cls='{cls}' title='{title}' rect={rect.Width}x{rect.Height} floated={floated}");
         return true;
     }
 
@@ -793,25 +793,10 @@ public sealed class Dispatcher
     /// focus rotation lands on phantom slots (e.g. Teams cloaks its main
     /// hwnd after a meeting window pops, leaving an empty navigable slot).
     /// </summary>
-    private static bool ShouldSkip(ManagedWindow w)
-    {
-        if (WindowOps.IsMinimized(w.Hwnd)) return true;
-        if (WindowOps.IsCloakedByApp(w.Hwnd)) return true;
-        if (!WindowOps.IsVisible(w.Hwnd)) return true;
-        // Some apps (notably Teams helper hwnds) accept SetWindowPos and report
-        // success but stay at their native sub-tile size. They aren't cloaked,
-        // aren't hidden, and aren't minimized, so they'd silently consume a
-        // strip slot while being visually invisible — the "empty tile" bug.
-        // Same 100px threshold as LooksManageable; symmetric in and out.
-        var r = WindowOps.GetVisibleRect(w.Hwnd);
-        if (r.Width < 100 || r.Height < 100) return true;
-        // Renderless helpers (Teams background WebView2 hosts) accept our
-        // SetWindowPos and report a full frame but their title bar is
-        // STATE_SYSTEM_INVISIBLE. Same check at adoption + on every layout
-        // pass — symmetric protection in case a window flips state later.
-        if (WindowOps.TitleBarInvisible(w.Hwnd)) return true;
-        return false;
-    }
+    private static bool ShouldSkip(ManagedWindow w) =>
+        WindowOps.IsMinimized(w.Hwnd)
+        || WindowOps.IsCloakedByApp(w.Hwnd)
+        || !WindowOps.IsVisible(w.Hwnd);
 
     private static bool IsMin(ManagedWindow w) => ShouldSkip(w);
 
