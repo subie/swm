@@ -5,13 +5,6 @@ namespace SwmSearch;
 
 public sealed record WindowItem(long Hwnd, string Exe, string Title, bool Floating, bool Focused, bool CurrentDesktop)
 {
-    public override string ToString()
-    {
-        var marker = Focused ? "* " : (Floating ? "~ " : "  ");
-        var scope = CurrentDesktop ? "" : " [other]";
-        return $"{marker}{Exe,-28} {Title}{scope}";
-    }
-
     public bool Match(string q) =>
         q.Length == 0 ||
         Exe.Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -21,57 +14,192 @@ public sealed record WindowItem(long Hwnd, string Exe, string Title, bool Floati
 public sealed class SearchForm : Form
 {
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(nint hwnd, uint attr, ref int value, int size);
+    private const uint DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWCP_ROUND = 2;
+
+    // Modern dark palette inspired by VS Code's command palette.
+    private static readonly Color BgColor       = Color.FromArgb(0x1F, 0x1F, 0x1F);
+    private static readonly Color HeaderColor   = Color.FromArgb(0x2B, 0x2B, 0x2B);
+    private static readonly Color BorderColor   = Color.FromArgb(0x3C, 0x3C, 0x3C);
+    private static readonly Color TextColor     = Color.FromArgb(0xE0, 0xE0, 0xE0);
+    private static readonly Color MutedColor    = Color.FromArgb(0x9A, 0x9A, 0x9A);
+    private static readonly Color AccentColor   = Color.FromArgb(0x0E, 0x63, 0x9C);
+    private static readonly Color FocusedExe    = Color.FromArgb(0x4F, 0xC1, 0xFF);
+    private static readonly Color FloatingExe   = Color.FromArgb(0xCE, 0x9D, 0x6E);
+
+    private const int ExeColumnWidth = 220;
+    private const int RowHeight = 26;
+    private const int Pad = 12;
 
     private readonly List<WindowItem> _all;
     private readonly TextBox _query;
     private readonly ListBox _list;
+    private readonly Label _header;
     private bool _allDesktops;
     public long? PickedHwnd { get; private set; }
 
     public SearchForm(List<WindowItem> items)
     {
         _all = items;
-        FormBorderStyle = FormBorderStyle.FixedToolWindow;
+
+        FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = true;
-        // Center on the screen that contains the focused window (not the
-        // primary screen, and not the screen the mouse happens to be on).
-        // Captured *before* this form takes focus.
+        BackColor = BgColor;
+        ForeColor = TextColor;
+        DoubleBuffered = true;
+        Padding = new Padding(1);
+
         StartPosition = FormStartPosition.Manual;
-        ClientSize = new Size(640, 380);
+        ClientSize = new Size(720, 440);
         var target = Screen.FromHandle(GetForegroundWindow()).WorkingArea;
         Location = new Point(
             target.X + (target.Width - Size.Width) / 2,
-            target.Y + (target.Height - Size.Height) / 2);
+            target.Y + (target.Height - Size.Height) / 4);
         KeyPreview = true;
 
-        _query = new TextBox { Dock = DockStyle.Top, Font = new Font(FontFamily.GenericSansSerif, 11) };
-        _query.TextChanged += (_, _) => Refilter();
+        var headerFont = new Font("Segoe UI", 9f, FontStyle.Regular);
+        var queryFont = new Font("Segoe UI", 13f, FontStyle.Regular);
+        var listFont = new Font("Cascadia Mono", 10f, FontStyle.Regular,
+            GraphicsUnit.Point, 0, gdiVerticalFont: false);
+        if (listFont.Name != "Cascadia Mono")
+            listFont = new Font("Consolas", 10f, FontStyle.Regular);
 
+        _header = new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 26,
+            BackColor = HeaderColor,
+            ForeColor = MutedColor,
+            Font = headerFont,
+            Padding = new System.Windows.Forms.Padding(Pad, 6, Pad, 6),
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+
+        var queryHost = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 48,
+            BackColor = BgColor,
+            Padding = new System.Windows.Forms.Padding(Pad, 10, Pad, 10),
+        };
+        _query = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            BorderStyle = BorderStyle.None,
+            Font = queryFont,
+            BackColor = BgColor,
+            ForeColor = TextColor,
+        };
+        _query.TextChanged += (_, _) => Refilter();
+        queryHost.Controls.Add(_query);
+
+        var separator = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 1,
+            BackColor = BorderColor,
+        };
+
+        var listHost = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = BgColor,
+            Padding = new System.Windows.Forms.Padding(Pad - 4, 6, Pad - 4, Pad - 4),
+        };
         _list = new ListBox
         {
             Dock = DockStyle.Fill,
             IntegralHeight = false,
-            Font = new Font(FontFamily.GenericMonospace, 10),
+            Font = listFont,
+            BorderStyle = BorderStyle.None,
+            BackColor = BgColor,
+            ForeColor = TextColor,
+            DrawMode = DrawMode.OwnerDrawFixed,
+            ItemHeight = RowHeight,
         };
+        _list.DrawItem += DrawListItem;
         _list.DoubleClick += (_, _) => Pick();
+        listHost.Controls.Add(_list);
 
-        Controls.Add(_list);
-        Controls.Add(_query);
+        Controls.Add(listHost);
+        Controls.Add(separator);
+        Controls.Add(queryHost);
+        Controls.Add(_header);
 
         KeyDown += OnKey;
         Deactivate += (_, _) => Close();
+        HandleCreated += (_, _) =>
+        {
+            int pref = DWMWCP_ROUND;
+            DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
+        };
 
         UpdateTitle();
         Refilter();
         ActiveControl = _query;
     }
 
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var pen = new Pen(BorderColor, 1);
+        var r = ClientRectangle;
+        e.Graphics.DrawRectangle(pen, 0, 0, r.Width - 1, r.Height - 1);
+    }
+
+    private void DrawListItem(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= _list.Items.Count) return;
+        var w = (WindowItem)_list.Items[e.Index]!;
+        var selected = (e.State & DrawItemState.Selected) != 0;
+        var g = e.Graphics;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+        var bg = selected ? AccentColor : BgColor;
+        using (var brush = new SolidBrush(bg)) g.FillRectangle(brush, e.Bounds);
+
+        var exeColor = selected ? Color.White
+            : w.Focused ? FocusedExe
+            : w.Floating ? FloatingExe
+            : TextColor;
+        var titleColor = selected ? Color.White : MutedColor;
+
+        var marker = w.Focused ? "●" : w.Floating ? "○" : " ";
+        var markerColor = selected ? Color.White
+            : w.Focused ? FocusedExe
+            : w.Floating ? FloatingExe
+            : MutedColor;
+
+        const int leftPad = 10;
+        const int markerWidth = 18;
+        var exeX = e.Bounds.Left + leftPad + markerWidth;
+        var titleX = exeX + ExeColumnWidth + 14;
+        var y = e.Bounds.Top;
+        var rowHeight = e.Bounds.Height;
+
+        var markerRect = new Rectangle(e.Bounds.Left + leftPad, y, markerWidth, rowHeight);
+        var exeRect = new Rectangle(exeX, y, ExeColumnWidth, rowHeight);
+        var titleRect = new Rectangle(titleX, y, e.Bounds.Right - titleX - leftPad, rowHeight);
+
+        var fmt = TextFormatFlags.Left | TextFormatFlags.VerticalCenter
+                | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix
+                | TextFormatFlags.SingleLine;
+
+        TextRenderer.DrawText(g, marker, e.Font!, markerRect, markerColor, fmt);
+        TextRenderer.DrawText(g, w.Exe, e.Font!, exeRect, exeColor, fmt);
+
+        var title = w.CurrentDesktop ? w.Title : $"{w.Title}  [other desktop]";
+        TextRenderer.DrawText(g, title, e.Font!, titleRect, titleColor, fmt);
+    }
+
     private void UpdateTitle()
     {
-        Text = _allDesktops
-            ? "swm search — all desktops  [Tab: current only]"
-            : "swm search — current desktop  [Tab: all desktops]";
+        _header.Text = _allDesktops
+            ? "  swm search   ·   all desktops   ·   Tab: current only   ·   Esc to cancel"
+            : "  swm search   ·   current desktop   ·   Tab: all desktops   ·   Esc to cancel";
     }
 
     private void Refilter()
