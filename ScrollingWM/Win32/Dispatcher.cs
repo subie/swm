@@ -213,7 +213,15 @@ public sealed class Dispatcher
                 if (nowShow - since >= ShowAdoptDelay) ready.Add(hwnd);
             if (ready.Count > 0)
             {
-                var toReapply = new HashSet<StripKey>();
+                // Per-strip flag: bring focused tile to front only when the
+                // newly adopted window is the current OS foreground (i.e. a
+                // user-driven launch like Start menu / shortcut click). That
+                // way the new tile keeps activation and gets the highlight,
+                // while late-adopted background windows (e.g. an already-open
+                // app we hadn't tracked yet) don't yank focus off whatever
+                // the user is currently working in.
+                var toReapply = new Dictionary<StripKey, bool>();
+                var fg = WindowOps.Foreground();
                 foreach (var hwnd in ready)
                 {
                     _pendingShowAdopt.Remove(hwnd);
@@ -222,9 +230,23 @@ public sealed class Dispatcher
                     if (WindowOps.IsCloakedByApp(hwnd)) continue;
                     if (_hwndToStrip.ContainsKey(hwnd)) continue;
                     if (TryTrack(hwnd) && _hwndToStrip.TryGetValue(hwnd, out var k))
-                        toReapply.Add(k);
+                    {
+                        var isForegroundLaunch = hwnd == fg;
+                        if (isForegroundLaunch)
+                        {
+                            var strip = _strips[k];
+                            var idx = strip.IndexOf(hwnd);
+                            if (idx >= 0)
+                            {
+                                strip.SetFocus(idx);
+                                _lastActiveStripKey = k;
+                            }
+                        }
+                        toReapply[k] = toReapply.GetValueOrDefault(k) || isForegroundLaunch;
+                    }
                 }
-                foreach (var k in toReapply) ReApply(_strips[k], bringToFront: false);
+                foreach (var (k, bringToFront) in toReapply)
+                    ReApply(_strips[k], bringToFront);
             }
         }
 
