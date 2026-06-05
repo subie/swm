@@ -44,6 +44,30 @@ public static class Layout
         var virtualTop = minTop;
         var virtualHeight = maxBottom - minTop;
 
+        // Per-window vertical extent: each tile takes the top/height of the
+        // monitor it overlaps most horizontally. Using the union vertical
+        // extent across all monitors makes tiles stretch the full height of
+        // the bounding box of every display — a real problem when monitors
+        // are stacked vertically (e.g. a laptop screen below an external),
+        // since every tile then runs from y=0 down past the lower monitor's
+        // bottom. Horizontal straddling across bezels is still fine.
+        (int top, int height) VerticalForWindow(int leftPx, int widthPx)
+        {
+            var rightPx = leftPx + widthPx;
+            Rect best = default;
+            var bestOverlap = -1;
+            foreach (var m in monitors)
+            {
+                var overlap = Math.Min(rightPx, m.Right) - Math.Max(leftPx, m.Left);
+                if (overlap > bestOverlap)
+                {
+                    bestOverlap = overlap;
+                    best = m;
+                }
+            }
+            return bestOverlap > 0 ? (best.Top, best.Bottom - best.Top) : (virtualTop, virtualHeight);
+        }
+
         var focused = s.Focused;
 
         int scrollOffset = s.ScrollOffsetPx;
@@ -105,7 +129,8 @@ public static class Layout
         {
             if (skipped[i]) continue;
             var w = s.Windows[i];
-            result[w.Hwnd] = Rect.FromSize(positions[i], virtualTop, w.WidthPx, virtualHeight);
+            var (top, height) = VerticalForWindow(positions[i], w.WidthPx);
+            result[w.Hwnd] = Rect.FromSize(positions[i], top, w.WidthPx, height);
         }
         return result;
     }
