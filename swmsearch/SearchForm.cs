@@ -19,15 +19,15 @@ public sealed class SearchForm : Form
     private const uint DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
-    // Modern dark palette inspired by VS Code's command palette.
-    private static readonly Color BgColor       = Color.FromArgb(0x1F, 0x1F, 0x1F);
-    private static readonly Color HeaderColor   = Color.FromArgb(0x2B, 0x2B, 0x2B);
-    private static readonly Color BorderColor   = Color.FromArgb(0x3C, 0x3C, 0x3C);
-    private static readonly Color TextColor     = Color.FromArgb(0xE0, 0xE0, 0xE0);
-    private static readonly Color MutedColor    = Color.FromArgb(0x9A, 0x9A, 0x9A);
-    private static readonly Color AccentColor   = Color.FromArgb(0x0E, 0x63, 0x9C);
-    private static readonly Color FocusedExe    = Color.FromArgb(0x4F, 0xC1, 0xFF);
-    private static readonly Color FloatingExe   = Color.FromArgb(0xCE, 0x9D, 0x6E);
+    // Light palette inspired by VS Code's light command palette.
+    private static readonly Color BgColor       = Color.FromArgb(0xFF, 0xFF, 0xFF);
+    private static readonly Color HeaderColor   = Color.FromArgb(0xF3, 0xF3, 0xF3);
+    private static readonly Color BorderColor   = Color.FromArgb(0xCC, 0xCC, 0xCC);
+    private static readonly Color TextColor     = Color.FromArgb(0x1F, 0x1F, 0x1F);
+    private static readonly Color MutedColor    = Color.FromArgb(0x61, 0x61, 0x61);
+    private static readonly Color AccentColor   = Color.FromArgb(0x00, 0x67, 0xC0);
+    private static readonly Color FocusedExe    = Color.FromArgb(0x00, 0x55, 0xAA);
+    private static readonly Color FloatingExe   = Color.FromArgb(0xB5, 0x5E, 0x00);
 
     private const int ExeColumnWidth = 220;
     private const int RowHeight = 26;
@@ -70,11 +70,11 @@ public sealed class SearchForm : Form
         _header = new Label
         {
             Dock = DockStyle.Top,
-            Height = 26,
+            Height = 36,
             BackColor = HeaderColor,
             ForeColor = MutedColor,
             Font = headerFont,
-            Padding = new System.Windows.Forms.Padding(Pad, 6, Pad, 6),
+            Padding = new System.Windows.Forms.Padding(Pad, 10, Pad, 10),
             TextAlign = ContentAlignment.MiddleLeft,
         };
 
