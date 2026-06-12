@@ -97,6 +97,10 @@ public static partial class WindowOps
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     private static partial nint GetWindowLongPtr(nint hwnd, int nIndex);
 
+    [LibraryImport("user32.dll")]
+    private static partial nint GetWindow(nint hwnd, uint cmd);
+    private const uint GW_OWNER = 4;
+
     [LibraryImport("dwmapi.dll")]
     private static partial int DwmGetWindowAttribute(nint hwnd, uint dwAttribute, out int pvAttribute, int cbAttribute);
 
@@ -301,6 +305,20 @@ public static partial class WindowOps
         return (s & WS_THICKFRAME) != 0 && (s & WS_MAXIMIZEBOX) != 0;
     }
     public static bool IsTopLevel(nint hwnd) => GetAncestor(hwnd, GA_ROOT) == hwnd;
+
+    /// <summary>
+    /// True when the window has a non-zero owner — i.e., Windows considers it
+    /// a popup/dialog floating above a parent app window. Real main windows
+    /// have owner=0. Owned popups (Teams' in-process WebView2 sign-in window
+    /// for ADO card auth, in-app About boxes, modal pickers) often advertise
+    /// WS_THICKFRAME+WS_MAXIMIZEBOX so <c>IsResizable</c> alone won't catch
+    /// them, but tiling them still breaks their content the same way it
+    /// breaks the WAM "Sign in" popup. Treat ownership as an independent
+    /// auto-float signal. Terminal-spawned auth popups (WAM, browsers
+    /// launched by CLIs) reach the desktop as separate processes with no
+    /// owner relationship to the terminal, so they're unaffected.
+    /// </summary>
+    public static bool IsOwned(nint hwnd) => GetWindow(hwnd, GW_OWNER) != 0;
 
     // DWM cloak reasons
     private const int DWM_CLOAKED_APP = 0x00000001;

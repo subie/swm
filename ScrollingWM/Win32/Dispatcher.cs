@@ -464,7 +464,7 @@ public sealed class Dispatcher
         StateFile.Write(_originalRects);
         var w = new ManagedWindow(hwnd, exe, cls, ResolveWindowWidth(hwnd));
         bool floated;
-        if (MatchesFloatRule(exe, cls, title) || !WindowOps.IsResizable(hwnd))
+        if (MatchesFloatRule(exe, cls, title) || !WindowOps.IsResizable(hwnd) || WindowOps.IsOwned(hwnd))
         {
             strip.Floated[hwnd] = new FloatRecord(w, strip.Windows.Count, rect);
             floated = true;
